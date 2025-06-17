@@ -1,0 +1,74 @@
+# Example Qwen-TUI Configuration
+# Copy this file to ~/.config/qwen-tui/config.yaml or your project directory
+
+# Backend preferences (in order of preference)
+preferred_backends:
+  - ollama
+  - lm_studio
+  - vllm
+  - openrouter
+
+# Ollama backend configuration
+ollama:
+  host: localhost
+  port: 11434
+  model: "qwen2.5-coder:latest"
+  timeout: 300
+  keep_alive: "5m"
+
+# LM Studio backend configuration
+lm_studio:
+  host: localhost
+  port: 1234
+  api_key: null  # Optional, if LM Studio requires authentication
+  timeout: 300
+
+# vLLM backend configuration
+vllm:
+  host: localhost
+  port: 8000
+  model: "Qwen/Qwen2.5-Coder-7B-Instruct"
+  timeout: 300
+  max_tokens: 4096
+  temperature: 0.1
+
+# OpenRouter backend configuration
+openrouter:
+  api_key: ""  # Set your OpenRouter API key here or use OPENROUTER_API_KEY env var
+  model: "qwen/qwen-2.5-coder-32b-instruct"
+  timeout: 300
+  base_url: "https://openrouter.ai/api/v1"
+
+# Logging configuration
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: human  # human or json
+  file: null  # Path to log file, or null for console only
+  max_size: 10000000  # Max log file size in bytes
+  backup_count: 5  # Number of backup files to keep
+
+# Security configuration
+security:
+  profile: balanced  # strict, balanced, permissive, custom
+  allowed_commands: []  # List of explicitly allowed shell commands
+  blocked_commands: []  # List of explicitly blocked shell commands
+  allow_network: true
+  allow_file_write: true
+  allow_file_delete: false
+  require_approval_for:
+    - file_delete
+    - shell_exec
+    - network_request
+
+# UI configuration
+ui:
+  theme: dark  # dark or light
+  animation_speed: 1.0
+  show_typing_indicator: true
+  auto_scroll: true
+  font_size: normal  # small, normal, large
+
+# Advanced settings
+max_context_tokens: 32000
+parallel_tools: 3
+cache_responses: true

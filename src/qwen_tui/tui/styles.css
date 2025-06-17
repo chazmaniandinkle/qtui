@@ -1,0 +1,150 @@
+/* Qwen-TUI Styles */
+
+/* Main container */
+#main-container {
+    layout: horizontal;
+    height: 100%;
+}
+
+/* Chat area */
+#chat-area {
+    width: 70%;
+    layout: vertical;
+}
+
+#chat-panel {
+    height: 90%;
+    padding: 1;
+    border: solid $primary;
+    border-title: "Conversation";
+    overflow-y: auto;
+    scrollbar-background: $surface;
+    scrollbar-color: $primary;
+}
+
+#input-panel {
+    height: 10%;
+    padding: 1;
+    layout: horizontal;
+}
+
+#message-input {
+    width: 80%;
+}
+
+#send-button {
+    width: 20%;
+    margin-left: 1;
+}
+
+/* Side panels */
+#side-panels {
+    width: 30%;
+    layout: vertical;
+}
+
+#backend-panel, #status-panel {
+    height: 50%;
+    padding: 1;
+    border: solid $accent;
+    margin: 1;
+}
+
+#backend-panel {
+    border-title: "Backends";
+}
+
+#status-panel {
+    border-title: "Status";
+}
+
+/* Panel titles */
+.panel-title {
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+
+/* Hidden elements */
+.hidden {
+    display: none;
+}
+
+/* Message styling */
+.user-message {
+    color: $text;
+    margin-bottom: 1;
+}
+
+.assistant-message {
+    color: $success;
+    margin-bottom: 1;
+}
+
+.system-message {
+    color: $warning;
+    text-style: italic;
+    margin-bottom: 1;
+}
+
+.error-message {
+    color: $error;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+/* Responsive design */
+@media (max-width: 80) {
+    #chat-area {
+        width: 100%;
+    }
+    
+    #side-panels {
+        display: none;
+    }
+}
+
+/* Dark theme adjustments */
+Screen {
+    background: $surface;
+}
+
+Header {
+    background: $primary;
+    color: $text;
+}
+
+Footer {
+    background: $primary;
+    color: $text;
+}
+
+/* Input styling */
+Input {
+    background: $surface;
+    color: $text;
+    border: solid $accent;
+}
+
+Input:focus {
+    border: solid $primary;
+}
+
+/* Button styling */
+Button {
+    background: $primary;
+    color: $text;
+}
+
+Button:hover {
+    background: $accent;
+}
+
+Button.-primary {
+    background: $success;
+    color: $text;
+}
+
+Button.-primary:hover {
+    background: $warning;
+}
