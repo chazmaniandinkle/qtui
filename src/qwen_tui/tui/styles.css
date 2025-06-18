@@ -266,7 +266,6 @@ Button.-primary:hover {
     padding: 0 1;
     margin: 0 0 1 0;
     color: $text;
-    cursor: pointer;
 }
 
 .thinking-widget:hover {
@@ -279,22 +278,22 @@ Button.-primary:hover {
     padding: 0 1;
     margin: 0 0 1 0;
     color: $text;
-    border-radius: 1;
+    border: round;
 }
 
 .action-widget.running {
     border-left: solid $warning;
-    background: lighten($warning, 80%);
+    background: $surface;
 }
 
 .action-widget.completed {
     border-left: solid $success;
-    background: lighten($success, 80%);
+    background: $surface;
 }
 
 .action-widget.error {
     border-left: solid $error;
-    background: lighten($error, 80%);
+    background: $surface;
 }
 
 /* Thinking animation styles */
