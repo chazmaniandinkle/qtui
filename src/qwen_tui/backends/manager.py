@@ -11,6 +11,7 @@ from enum import Enum
 
 from .base import LLMBackend, LLMRequest, LLMResponse, BackendStatus, BackendPool
 from .ollama import OllamaBackend
+from .lm_studio import LMStudioBackend
 from ..config import Config, BackendType
 from ..exceptions import BackendError, BackendUnavailableError
 from ..logging import get_main_logger
@@ -155,17 +156,12 @@ class BackendManager:
             self.logger.debug("Ollama backend not available", error=str(e))
             return None
     
-    async def _create_lm_studio_backend(self) -> Optional[LLMBackend]:
+    async def _create_lm_studio_backend(self) -> Optional[LMStudioBackend]:
         """Create and initialize LM Studio backend."""
-        # Import here to avoid circular imports
         try:
-            from .lm_studio import LMStudioBackend
             backend = LMStudioBackend(self.config.lm_studio)
             await backend.initialize()
             return backend
-        except ImportError:
-            self.logger.debug("LM Studio backend not implemented yet")
-            return None
         except Exception as e:
             self.logger.debug("LM Studio backend not available", error=str(e))
             return None
@@ -396,3 +392,203 @@ class BackendManager:
             },
             "status": "healthy" if available_backends else "unhealthy"
         }
+    
+    # Model Management Methods
+    
+    async def get_all_models(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Get all available models from all backends."""
+        all_models = {}
+        
+        for backend_type, backend in self.backends.items():
+            try:
+                if hasattr(backend, 'get_detailed_models'):
+                    # Enhanced model info (LM Studio, etc.)
+                    models = await backend.get_detailed_models()
+                    all_models[backend_type.value] = [
+                        {
+                            "id": model.get("id", "unknown"),
+                            "name": model.get("id", "unknown"),
+                            "backend": backend_type.value,
+                            "object": model.get("object", "model"),
+                            "created": model.get("created"),
+                            "owned_by": model.get("owned_by", "local"),
+                            "details": model
+                        }
+                        for model in models
+                    ]
+                else:
+                    # Basic model list (Ollama, etc.)
+                    model_ids = await backend.get_available_models()
+                    all_models[backend_type.value] = [
+                        {
+                            "id": model_id,
+                            "name": model_id,
+                            "backend": backend_type.value,
+                            "object": "model",
+                            "owned_by": "local"
+                        }
+                        for model_id in model_ids
+                    ]
+                    
+            except Exception as e:
+                self.logger.error(f"Failed to get models from {backend_type.value}",
+                                error=str(e))
+                all_models[backend_type.value] = []
+        
+        return all_models
+    
+    async def get_models_by_backend(self, backend_type: BackendType) -> List[Dict[str, Any]]:
+        """Get models from a specific backend."""
+        backend = self.get_backend(backend_type)
+        if not backend:
+            return []
+        
+        try:
+            if hasattr(backend, 'get_detailed_models'):
+                models = await backend.get_detailed_models()
+                return [
+                    {
+                        "id": model.get("id", "unknown"),
+                        "name": model.get("id", "unknown"),
+                        "backend": backend_type.value,
+                        "object": model.get("object", "model"),
+                        "created": model.get("created"),
+                        "owned_by": model.get("owned_by", "local"),
+                        "details": model
+                    }
+                    for model in models
+                ]
+            else:
+                model_ids = await backend.get_available_models()
+                return [
+                    {
+                        "id": model_id,
+                        "name": model_id,
+                        "backend": backend_type.value,
+                        "object": "model",
+                        "owned_by": "local"
+                    }
+                    for model_id in model_ids
+                ]
+        except Exception as e:
+            self.logger.error(f"Failed to get models from {backend_type.value}",
+                            error=str(e))
+            return []
+    
+    async def get_current_models(self) -> Dict[str, Optional[str]]:
+        """Get currently active/loaded model for each backend."""
+        current_models = {}
+        
+        for backend_type, backend in self.backends.items():
+            try:
+                if hasattr(backend, '_current_model'):
+                    current_models[backend_type.value] = backend._current_model
+                elif hasattr(backend, 'config') and 'model' in backend.config:
+                    current_models[backend_type.value] = backend.config['model']
+                else:
+                    current_models[backend_type.value] = None
+            except Exception as e:
+                self.logger.error(f"Failed to get current model from {backend_type.value}",
+                                error=str(e))
+                current_models[backend_type.value] = None
+        
+        return current_models
+    
+    async def switch_model(self, backend_type: BackendType, model_id: str) -> bool:
+        """Switch to a specific model on a backend."""
+        backend = self.get_backend(backend_type)
+        if not backend:
+            self.logger.error(f"Backend {backend_type.value} not found")
+            return False
+        
+        try:
+            if hasattr(backend, 'switch_model'):
+                # Backend supports direct model switching
+                success = await backend.switch_model(model_id)
+                if success:
+                    self.logger.info(f"Successfully switched {backend_type.value} to model {model_id}")
+                return success
+            else:
+                # Update configuration for backends that don't support runtime switching
+                backend.config['model'] = model_id
+                self.logger.info(f"Updated {backend_type.value} model preference to {model_id}")
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"Failed to switch model on {backend_type.value}",
+                            model=model_id,
+                            error=str(e))
+            return False
+    
+    async def get_model_info(self, backend_type: BackendType, model_id: str) -> Optional[Dict[str, Any]]:
+        """Get detailed information about a specific model."""
+        backend = self.get_backend(backend_type)
+        if not backend:
+            return None
+        
+        try:
+            if hasattr(backend, 'get_model_info'):
+                return await backend.get_model_info(model_id)
+            else:
+                # Fallback: check if model exists in available models
+                models = await self.get_models_by_backend(backend_type)
+                for model in models:
+                    if model['id'] == model_id:
+                        return model
+                return None
+        except Exception as e:
+            self.logger.error(f"Failed to get model info from {backend_type.value}",
+                            model=model_id,
+                            error=str(e))
+            return None
+    
+    async def is_model_available(self, backend_type: BackendType, model_id: str) -> bool:
+        """Check if a specific model is available on a backend."""
+        try:
+            models = await self.get_models_by_backend(backend_type)
+            return any(model['id'] == model_id for model in models)
+        except Exception:
+            return False
+    
+    async def find_model_across_backends(self, model_pattern: str) -> List[Dict[str, Any]]:
+        """Find models matching a pattern across all backends."""
+        matching_models = []
+        all_models = await self.get_all_models()
+        
+        for backend, models in all_models.items():
+            for model in models:
+                if (model_pattern.lower() in model['id'].lower() or 
+                    model_pattern.lower() in model['name'].lower()):
+                    matching_models.append(model)
+        
+        return matching_models
+    
+    async def get_recommended_models(self) -> List[Dict[str, Any]]:
+        """Get recommended models for coding tasks."""
+        recommended_patterns = [
+            "qwen2.5-coder",
+            "qwen-coder", 
+            "qwen3",
+            "codeqwen",
+            "starcoder",
+            "codellama",
+            "deepseek-coder",
+            "deepcoder"
+        ]
+        
+        recommended_models = []
+        
+        for pattern in recommended_patterns:
+            matches = await self.find_model_across_backends(pattern)
+            recommended_models.extend(matches)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_models = []
+        for model in recommended_models:
+            key = (model['backend'], model['id'])
+            if key not in seen:
+                seen.add(key)
+                unique_models.append(model)
+        
+        return unique_models

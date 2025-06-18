@@ -6,7 +6,7 @@ Provides command-line interface with Rich console output and progress indicators
 import asyncio
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Union
 
 import typer
 from rich.console import Console
@@ -28,8 +28,10 @@ app = typer.Typer(
 
 backends_app = typer.Typer(name="backends", help="Backend management commands")
 config_app = typer.Typer(name="config", help="Configuration management commands")
+models_app = typer.Typer(name="models", help="Model management and selection commands")
 app.add_typer(backends_app, name="backends")
 app.add_typer(config_app, name="config")
+app.add_typer(models_app, name="models")
 
 console = Console()
 
@@ -290,6 +292,392 @@ def version():
         "[dim]Built with ❤️ for developers[/dim]",
         title="Version Information"
     ))
+
+
+# Model Management Commands
+
+async def _get_initialized_backend_manager(config):
+    """Get an initialized backend manager."""
+    from ..backends.manager import BackendManager
+    backend_manager = BackendManager(config)
+    await backend_manager.initialize()
+    return backend_manager
+
+async def _run_with_cleanup(config, func, *args, **kwargs):
+    """Run an async function with proper backend cleanup."""
+    backend_manager = await _get_initialized_backend_manager(config)
+    try:
+        return await func(backend_manager, *args, **kwargs)
+    finally:
+        await backend_manager.cleanup()
+
+@models_app.command("list")
+def list_models(
+    backend: Optional[str] = typer.Option(None, "--backend", "-b", help="Filter by specific backend"),
+    current: bool = typer.Option(False, "--current", "-c", help="Show currently active models only"),
+    recommended: bool = typer.Option(False, "--recommended", "-r", help="Show recommended coding models only")
+):
+    """List all available models from backends."""
+    try:
+        config = get_config()
+        from ..backends.manager import BackendManager
+        
+        async def _run_list():
+            backend_manager = await _get_initialized_backend_manager(config)
+            
+            if recommended:
+                models_data = await backend_manager.get_recommended_models()
+                _display_recommended_models(models_data)
+            elif current:
+                current_models = await backend_manager.get_current_models()
+                _display_current_models(current_models)
+            elif backend:
+                try:
+                    backend_type = BackendType(backend.lower())
+                    models_data = await backend_manager.get_models_by_backend(backend_type)
+                    _display_models_table({backend: models_data}, f"{backend.title()} Models")
+                except ValueError:
+                    available = [b.value for b in BackendType]
+                    console.print(f"[red]Invalid backend '{backend}'. Available: {', '.join(available)}[/red]")
+                    raise typer.Exit(1)
+            else:
+                all_models = await backend_manager.get_all_models()
+                _display_models_table(all_models, "All Available Models")
+        
+        with console.status("[bold blue]Loading models..."):
+            asyncio.run(_run_list())
+                
+    except Exception as e:
+        console.print(f"[red]Error listing models: {e}[/red]")
+        sys.exit(1)
+
+
+@models_app.command("switch")
+def switch_model(
+    backend: str = typer.Argument(..., help="Backend to switch model on"),
+    model: str = typer.Argument(..., help="Model ID to switch to"),
+    verify: bool = typer.Option(True, "--verify/--no-verify", help="Verify model availability before switching")
+):
+    """Switch to a specific model on a backend."""
+    try:
+        config = get_config()
+        
+        try:
+            backend_type = BackendType(backend.lower())
+        except ValueError:
+            available = [b.value for b in BackendType]
+            console.print(f"[red]Invalid backend '{backend}'. Available: {', '.join(available)}[/red]")
+            raise typer.Exit(1)
+            
+        async def _switch_model(backend_manager):
+            # Verify model availability if requested
+            if verify:
+                is_available = await backend_manager.is_model_available(backend_type, model)
+                
+                if not is_available:
+                    console.print(f"[red]Model '{model}' is not available on {backend}[/red]")
+                    
+                    # Show available models
+                    models = await backend_manager.get_models_by_backend(backend_type)
+                    if models:
+                        console.print(f"\n[yellow]Available models on {backend}:[/yellow]")
+                        for m in models[:10]:  # Show first 10
+                            console.print(f"  • {m['id']}")
+                        if len(models) > 10:
+                            console.print(f"  ... and {len(models) - 10} more")
+                    
+                    return False
+            
+            # Attempt to switch model
+            success = await backend_manager.switch_model(backend_type, model)
+            
+            if success:
+                console.print(f"[green]✓[/green] Successfully switched {backend} to model: {model}")
+                
+                # Show model info if available
+                model_info = await backend_manager.get_model_info(backend_type, model)
+                if model_info and 'details' in model_info:
+                    details = model_info['details']
+                    console.print(f"  [dim]Created: {details.get('created', 'Unknown')}[/dim]")
+                    console.print(f"  [dim]Owner: {details.get('owned_by', 'Unknown')}[/dim]")
+                return True
+            else:
+                console.print(f"[red]✗[/red] Failed to switch {backend} to model: {model}")
+                
+                if backend == "lm_studio":
+                    console.print("[yellow]Note: LM Studio requires manual model switching through the GUI[/yellow]")
+                
+                return False
+        
+        # Run with proper initialization and cleanup
+        with console.status(f"[bold blue]Switching {backend} to {model}..."):
+            success = asyncio.run(_run_with_cleanup(config, _switch_model))
+            
+            if not success:
+                sys.exit(1)
+                
+    except Exception as e:
+        console.print(f"[red]Error switching model: {e}[/red]")
+        sys.exit(1)
+
+
+@models_app.command("info")
+def model_info(
+    backend: str = typer.Argument(..., help="Backend name"),
+    model: str = typer.Argument(..., help="Model ID to get info for")
+):
+    """Get detailed information about a specific model."""
+    try:
+        config = get_config()
+        from ..backends.manager import BackendManager
+        
+        backend_manager = BackendManager(config)
+        
+        try:
+            backend_type = BackendType(backend.lower())
+        except ValueError:
+            available = [b.value for b in BackendType]
+            console.print(f"[red]Invalid backend '{backend}'. Available: {', '.join(available)}[/red]")
+            raise typer.Exit(1)
+        
+        with console.status(f"[bold blue]Getting info for {model}..."):
+            model_info = asyncio.run(backend_manager.get_model_info(backend_type, model))
+            
+            if not model_info:
+                console.print(f"[red]Model '{model}' not found on {backend}[/red]")
+                sys.exit(1)
+            
+            # Display model information
+            console.print(Panel.fit(
+                f"[bold cyan]{model_info['id']}[/bold cyan]\n\n" +
+                f"[bold]Backend:[/bold] {model_info['backend']}\n" +
+                f"[bold]Type:[/bold] {model_info.get('object', 'model')}\n" +
+                f"[bold]Owner:[/bold] {model_info.get('owned_by', 'local')}\n" +
+                (f"[bold]Created:[/bold] {model_info.get('created', 'Unknown')}\n" if model_info.get('created') else ""),
+                title="Model Information"
+            ))
+            
+            # Show additional details if available
+            if 'details' in model_info:
+                details = model_info['details']
+                if isinstance(details, dict) and len(details) > 4:  # More than basic fields
+                    console.print("\n[bold]Additional Details:[/bold]")
+                    for key, value in details.items():
+                        if key not in ['id', 'object', 'owned_by', 'created']:
+                            console.print(f"  [dim]{key}:[/dim] {value}")
+                            
+    except Exception as e:
+        console.print(f"[red]Error getting model info: {e}[/red]")
+        sys.exit(1)
+
+
+@models_app.command("search")
+def search_models(
+    pattern: str = typer.Argument(..., help="Search pattern to match against model names"),
+    case_sensitive: bool = typer.Option(False, "--case-sensitive", "-s", help="Case sensitive search")
+):
+    """Search for models across all backends."""
+    try:
+        config = get_config()
+        
+        async def _search_models(backend_manager):
+            if case_sensitive:
+                # Override the find function for case-sensitive search
+                all_models = await backend_manager.get_all_models()
+                matching_models = []
+                for backend, models in all_models.items():
+                    for model in models:
+                        if pattern in model['id'] or pattern in model['name']:
+                            matching_models.append(model)
+            else:
+                matching_models = await backend_manager.find_model_across_backends(pattern)
+            
+            if not matching_models:
+                console.print(f"[yellow]No models found matching '{pattern}'[/yellow]")
+                return
+            
+            # Group by backend for display
+            grouped_models = {}
+            for model in matching_models:
+                backend = model['backend']
+                if backend not in grouped_models:
+                    grouped_models[backend] = []
+                grouped_models[backend].append(model)
+            
+            _display_models_table(grouped_models, f"Models matching '{pattern}'")
+        
+        with console.status(f"[bold blue]Searching for models matching '{pattern}'..."):
+            asyncio.run(_run_with_cleanup(config, _search_models))
+            
+    except Exception as e:
+        console.print(f"[red]Error searching models: {e}[/red]")
+        sys.exit(1)
+
+
+@models_app.command("current")
+def show_current_models():
+    """Show currently active/loaded models for each backend."""
+    try:
+        config = get_config()
+        
+        async def _run_current():
+            backend_manager = await _get_initialized_backend_manager(config)
+            current_models = await backend_manager.get_current_models()
+            _display_current_models(current_models)
+        
+        with console.status("[bold blue]Getting current models..."):
+            asyncio.run(_run_current())
+            
+    except Exception as e:
+        console.print(f"[red]Error getting current models: {e}[/red]")
+        sys.exit(1)
+
+
+@models_app.command("set-default")
+def set_default_model(
+    backend: str = typer.Argument(..., help="Backend to set default model for"),
+    model: str = typer.Argument(..., help="Model ID to set as default"),
+    save_to_config: bool = typer.Option(True, "--save/--no-save", help="Save to configuration file")
+):
+    """Set the default model for a backend."""
+    try:
+        config = get_config()
+        
+        try:
+            backend_type = BackendType(backend.lower())
+        except ValueError:
+            available = [b.value for b in BackendType]
+            console.print(f"[red]Invalid backend '{backend}'. Available: {', '.join(available)}[/red]")
+            raise typer.Exit(1)
+        
+        # Verify model exists if backend is available
+        from ..backends.manager import BackendManager
+        backend_manager = BackendManager(config)
+        
+        try:
+            is_available = asyncio.run(backend_manager.is_model_available(backend_type, model))
+            if not is_available:
+                console.print(f"[yellow]Warning: Model '{model}' is not currently available on {backend}[/yellow]")
+                if not typer.confirm("Set as default anyway?"):
+                    raise typer.Exit(0)
+        except Exception:
+            console.print(f"[yellow]Warning: Could not verify model availability on {backend}[/yellow]")
+        
+        # Update configuration
+        if backend_type == BackendType.OLLAMA:
+            config.ollama.model = model
+        elif backend_type == BackendType.LM_STUDIO:
+            config.lm_studio.api_key = config.lm_studio.api_key  # Keep existing settings
+        elif backend_type == BackendType.VLLM:
+            config.vllm.model = model
+        elif backend_type == BackendType.OPENROUTER:
+            config.openrouter.model = model
+        
+        console.print(f"[green]✓[/green] Set default model for {backend} to: {model}")
+        
+        if save_to_config:
+            try:
+                save_config(config)
+                console.print(f"[green]✓[/green] Configuration saved")
+            except Exception as e:
+                console.print(f"[red]Failed to save configuration: {e}[/red]")
+                sys.exit(1)
+                
+    except Exception as e:
+        console.print(f"[red]Error setting default model: {e}[/red]")
+        sys.exit(1)
+
+
+def _display_models_table(models_data: Union[Dict[str, List[Dict[str, Any]]], List[Dict[str, Any]]], title: str):
+    """Display models in a formatted table."""
+    table = Table(title=title)
+    table.add_column("Backend", style="cyan", no_wrap=True, width=12)
+    table.add_column("Model ID", style="green", width=45, overflow="ellipsis")
+    table.add_column("Type", style="dim", width=8)
+    table.add_column("Owner", style="dim", width=15, overflow="ellipsis")
+    table.add_column("Status", style="bold", width=10)
+    
+    if isinstance(models_data, list):
+        # Single backend list
+        for model in models_data:
+            table.add_row(
+                model['backend'].title(),
+                model['id'],
+                model.get('object', 'model'),
+                model.get('owned_by', 'local'),
+                "[green]Available[/green]"
+            )
+    else:
+        # Multiple backends
+        for backend, models in models_data.items():
+            if not models:
+                table.add_row(
+                    backend.title(),
+                    "[dim]No models[/dim]",
+                    "[dim]N/A[/dim]",
+                    "[dim]N/A[/dim]",
+                    "[red]None available[/red]"
+                )
+            else:
+                for i, model in enumerate(models):
+                    backend_name = backend.title() if i == 0 else ""
+                    table.add_row(
+                        backend_name,
+                        model['id'],
+                        model.get('object', 'model'),
+                        model.get('owned_by', 'local'),
+                        "[green]Available[/green]"
+                    )
+    
+    console.print(table)
+
+
+def _display_current_models(current_models: Dict[str, Optional[str]]):
+    """Display currently active models."""
+    table = Table(title="Currently Active Models")
+    table.add_column("Backend", style="cyan", no_wrap=True)
+    table.add_column("Current Model", style="green")
+    table.add_column("Status", style="bold")
+    
+    for backend, model in current_models.items():
+        if model:
+            table.add_row(
+                backend.title(),
+                model,
+                "[green]✓ Active[/green]"
+            )
+        else:
+            table.add_row(
+                backend.title(),
+                "[dim]None loaded[/dim]",
+                "[yellow]⚠ No model[/yellow]"
+            )
+    
+    console.print(table)
+
+
+def _display_recommended_models(models: List[Dict[str, Any]]):
+    """Display recommended coding models."""
+    if not models:
+        console.print("[yellow]No recommended coding models found[/yellow]")
+        return
+    
+    table = Table(title="Recommended Coding Models")
+    table.add_column("Model", style="green")
+    table.add_column("Backend", style="cyan")
+    table.add_column("Type", style="dim")
+    table.add_column("Status", style="bold")
+    
+    for model in models:
+        table.add_row(
+            model['id'],
+            model['backend'].title(),
+            model.get('object', 'model'),
+            "[green]Available[/green]"
+        )
+    
+    console.print(table)
+    console.print(f"\n[dim]Found {len(models)} recommended coding models[/dim]")
 
 
 def main_entry():

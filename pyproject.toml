@@ -85,7 +85,7 @@ Repository = "https://github.com/qwen-tui/qwen-tui"
 Issues = "https://github.com/qwen-tui/qwen-tui/issues"
 
 [project.scripts]
-qwen-tui = "qwen_tui.cli.main:app"
+qwen-tui = "qwen_tui.cli.main:main_entry"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/qwen_tui"]

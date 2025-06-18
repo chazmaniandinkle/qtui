@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Optional, Any
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Static, Button, Input
+from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
+from textual.widgets import Header, Footer, Static, Button, Input, Select, DataTable, Label
 from textual.binding import Binding
 from textual.reactive import reactive
+from textual.screen import ModalScreen
 
 from ..backends.manager import BackendManager
 from ..backends.base import LLMRequest, BackendStatus
@@ -33,6 +34,7 @@ class QwenTUIApp(App):
         Binding("ctrl+n", "new_conversation", "New Chat"),
         Binding("ctrl+b", "toggle_backends", "Backend Panel"),
         Binding("ctrl+s", "toggle_status", "Status Panel"),
+        Binding("ctrl+m", "show_model_selector", "Model Selector"),
         Binding("ctrl+h", "show_help", "Help"),
     ]
     
@@ -40,6 +42,7 @@ class QwenTUIApp(App):
     current_backend = reactive(None)
     backend_status = reactive("initializing")
     message_count = reactive(0)
+    is_compact_layout = reactive(False)
     
     def __init__(self, backend_manager: BackendManager, config: Config):
         super().__init__()
@@ -52,6 +55,8 @@ class QwenTUIApp(App):
         self.current_request = None
         self.show_backend_panel = False
         self.show_status_panel = True
+        self.min_width = 60  # Minimum width before switching to compact layout
+        self.min_height = 20  # Minimum height for proper functionality
         
     async def on_mount(self) -> None:
         """Initialize the application when mounted."""
@@ -74,6 +79,88 @@ class QwenTUIApp(App):
         except Exception as e:
             self.logger.error("Failed to initialize application", error=str(e))
             self.backend_status = "error"
+        
+        # Check initial layout
+        self.check_layout()
+    
+    def on_resize(self, event) -> None:
+        """Handle terminal resize events."""
+        self.check_layout()
+    
+    def check_layout(self) -> None:
+        """Check if we should switch to compact layout based on terminal size."""
+        try:
+            size = self.size
+            should_be_compact = size.width < self.min_width or size.height < self.min_height
+            
+            if should_be_compact != self.is_compact_layout:
+                self.is_compact_layout = should_be_compact
+                self.update_layout()
+                
+                # Show warning for very small screens
+                if size.width < 40 or size.height < 15:
+                    chat_panel = self.query_one("#chat-panel", ChatPanel)
+                    chat_panel.add_system_message(
+                        f"Terminal size is very small ({size.width}x{size.height}). "
+                        f"For optimal experience, resize to at least 60x20."
+                    )
+                
+        except Exception as e:
+            self.logger.debug("Layout check failed", error=str(e))
+    
+    def update_layout(self) -> None:
+        """Update the layout based on current compact status."""
+        try:
+            main_container = self.query_one("#main-container")
+            chat_area = self.query_one("#chat-area")
+            side_panels = self.query_one("#side-panels")
+            
+            if self.is_compact_layout:
+                # Switch to compact layout
+                main_container.add_class("compact-layout")
+                chat_area.styles.width = "100%"
+                side_panels.add_class("hidden")
+                self.show_backend_panel = False
+                self.show_status_panel = False
+                
+                # Check for ultra-compact mode (very small screens)
+                if self.size.width < 40 or self.size.height < 15:
+                    main_container.add_class("ultra-compact")
+                else:
+                    main_container.remove_class("ultra-compact")
+                
+                # Adjust input panel for small screens
+                input_panel = self.query_one("#input-panel")
+                message_input = self.query_one("#message-input")
+                send_button = self.query_one("#send-button")
+                
+                # Make input take more space, button smaller
+                if self.size.width < 40:
+                    message_input.styles.width = "65%"
+                    send_button.styles.width = "35%"
+                    input_panel.styles.height = "2"
+                else:
+                    message_input.styles.width = "80%"
+                    send_button.styles.width = "20%"
+                    input_panel.styles.height = "3"
+                    
+            else:
+                # Switch to normal layout
+                main_container.remove_class("compact-layout")
+                main_container.remove_class("ultra-compact")
+                chat_area.styles.width = "70%"
+                side_panels.remove_class("hidden")
+                
+                # Reset input panel proportions
+                input_panel = self.query_one("#input-panel")
+                message_input = self.query_one("#message-input")
+                send_button = self.query_one("#send-button")
+                message_input.styles.width = "80%"
+                send_button.styles.width = "20%"
+                input_panel.styles.height = "10%"
+                
+        except Exception as e:
+            self.logger.debug("Layout update failed", error=str(e))
     
     def compose(self) -> ComposeResult:
         """Compose the UI layout."""
@@ -137,6 +224,7 @@ class QwenTUIApp(App):
         - Ctrl+N: Start new conversation
         - Ctrl+B: Toggle backend panel
         - Ctrl+S: Toggle status panel
+        - Ctrl+M: Show model selector
         - Ctrl+H: Show this help
         - Enter: Send message
         - Shift+Enter: New line in input
@@ -144,6 +232,7 @@ class QwenTUIApp(App):
         Commands:
         - /help: Show this help
         - /backends: List available backends
+        - /models: Show model selector
         - /switch <backend>: Switch to specific backend
         - /clear: Clear conversation
         - /quit: Quit application
@@ -151,6 +240,37 @@ class QwenTUIApp(App):
         
         chat_panel = self.query_one("#chat-panel", ChatPanel)
         chat_panel.add_system_message(help_text)
+    
+    def action_show_model_selector(self) -> None:
+        """Show the model selector modal."""
+        def on_model_selected(result):
+            if result:
+                backend_type, model_id = result
+                self.logger.info(f"Selected model {model_id} on {backend_type}")
+                # Switch to the selected model
+                asyncio.create_task(self._switch_model(backend_type, model_id))
+        
+        model_selector = ModelSelectorScreen(self.backend_manager)
+        self.push_screen(model_selector, on_model_selected)
+    
+    async def _switch_model(self, backend_type: str, model_id: str) -> None:
+        """Switch to the selected model."""
+        try:
+            from ..config import BackendType
+            backend_enum = BackendType(backend_type.lower())
+            success = await self.backend_manager.switch_model(backend_enum, model_id)
+            
+            chat_panel = self.query_one("#chat-panel", ChatPanel)
+            if success:
+                chat_panel.add_system_message(f"Switched to model: {model_id} on {backend_type}")
+                self.current_backend = backend_type
+            else:
+                chat_panel.add_error_message(f"Failed to switch to model: {model_id} on {backend_type}")
+                
+        except Exception as e:
+            chat_panel = self.query_one("#chat-panel", ChatPanel)
+            chat_panel.add_error_message(f"Error switching model: {str(e)}")
+            self.logger.error("Model switch error", error=str(e))
     
     async def send_message(self, message: str) -> None:
         """Send a message to the current backend."""
@@ -245,6 +365,9 @@ class QwenTUIApp(App):
                 name = info.get("name", backend_type.value)
                 info_text += f"- {name}: {status}\n"
             chat_panel.add_system_message(info_text)
+        
+        elif cmd == "models":
+            self.action_show_model_selector()
         
         elif cmd == "switch" and args:
             backend_name = args[0].lower()
@@ -369,3 +492,130 @@ class StatusPanel(Container):
     def compose(self) -> ComposeResult:
         yield Static("Status Panel", classes="panel-title")
         yield Static("Initializing...", id="status-info")
+
+
+class ModelSelectorScreen(ModalScreen):
+    """Modal screen for selecting models across backends."""
+    
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("enter", "select_model", "Select"),
+    ]
+    
+    def __init__(self, backend_manager: BackendManager, **kwargs):
+        super().__init__(**kwargs)
+        self.backend_manager = backend_manager
+        self.models = {}
+        self.selected_row = 0
+    
+    def compose(self) -> ComposeResult:
+        with Container(id="model-selector"):
+            yield Label("Select a Model", id="selector-title")
+            yield DataTable(id="models-table", show_header=True, show_cursor=True)
+            with Horizontal(id="selector-buttons"):
+                yield Button("Select", id="select-btn", variant="primary")
+                yield Button("Cancel", id="cancel-btn")
+    
+    async def on_mount(self) -> None:
+        """Load models and adjust layout when mounted."""
+        self.adjust_for_screen_size()
+        await self.load_models()
+    
+    def adjust_for_screen_size(self) -> None:
+        """Adjust the model selector for small screens."""
+        try:
+            app_size = self.app.size
+            
+            # For very small screens, adjust table columns
+            if app_size.width < 70:
+                # This will be handled in the load_models method
+                pass
+                
+        except Exception as e:
+            pass
+    
+    async def load_models(self) -> None:
+        """Load all available models from backends."""
+        try:
+            table = self.query_one("#models-table", DataTable)
+            
+            # Adjust columns based on screen size
+            app_size = self.app.size
+            if app_size.width < 70:
+                # Compact columns for small screens
+                table.add_columns("Backend", "Model", "Status")
+            else:
+                # Full columns for larger screens
+                table.add_columns("Backend", "Model", "Type", "Status")
+            
+            # Get all models
+            all_models = await self.backend_manager.get_all_models()
+            current_models = await self.backend_manager.get_current_models()
+            
+            row_data = []
+            for backend_name, models in all_models.items():
+                current_model = current_models.get(backend_name)
+                
+                for model in models:
+                    model_id = model['id']
+                    status = "● Current" if model_id == current_model else "Available"
+                    
+                    # Truncate model ID for small screens
+                    display_model_id = model_id
+                    if app_size.width < 70 and len(model_id) > 30:
+                        display_model_id = model_id[:27] + "..."
+                    
+                    if app_size.width < 70:
+                        # Compact layout
+                        table.add_row(
+                            backend_name.title()[:8],  # Shorter backend name
+                            display_model_id,
+                            status[:12]  # Shorter status
+                        )
+                    else:
+                        # Full layout
+                        table.add_row(
+                            backend_name.title(),
+                            display_model_id,
+                            model.get('object', 'model'),
+                            status
+                        )
+                    
+                    # Store model data for selection
+                    row_data.append((backend_name, model_id))
+            
+            self.models = dict(enumerate(row_data))
+            
+        except Exception as e:
+            error_msg = f"Failed to load models: {str(e)}"
+            table = self.query_one("#models-table", DataTable)
+            table.add_row("Error", error_msg, "", "")
+    
+    def action_cancel(self) -> None:
+        """Cancel model selection."""
+        self.dismiss(None)
+    
+    def action_select_model(self) -> None:
+        """Select the currently highlighted model."""
+        table = self.query_one("#models-table", DataTable)
+        
+        if table.cursor_row is not None and table.cursor_row in self.models:
+            backend_type, model_id = self.models[table.cursor_row]
+            self.dismiss((backend_type, model_id))
+        else:
+            self.dismiss(None)
+    
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "select-btn":
+            self.action_select_model()
+        elif event.button.id == "cancel-btn":
+            self.action_cancel()
+    
+    async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle table row selection."""
+        self.selected_row = event.row_key
+        # Auto-select when row is clicked
+        if event.row_key in self.models:
+            backend_type, model_id = self.models[event.row_key]
+            self.dismiss((backend_type, model_id))

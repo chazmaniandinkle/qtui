@@ -16,7 +16,6 @@
     height: 90%;
     padding: 1;
     border: solid $primary;
-    border-title: "Conversation";
     overflow-y: auto;
     scrollbar-background: $surface;
     scrollbar-color: $primary;
@@ -51,11 +50,9 @@
 }
 
 #backend-panel {
-    border-title: "Backends";
 }
 
 #status-panel {
-    border-title: "Status";
 }
 
 /* Panel titles */
@@ -93,15 +90,124 @@
     margin-bottom: 1;
 }
 
-/* Responsive design */
-@media (max-width: 80) {
-    #chat-area {
-        width: 100%;
-    }
-    
-    #side-panels {
-        display: none;
-    }
+/* Responsive design for small terminals */
+.compact-layout #chat-area {
+    width: 100%;
+}
+
+.compact-layout #side-panels {
+    display: none;
+}
+
+/* Ensure minimum heights for functionality */
+#input-panel {
+    min-height: 3;
+    max-height: 5;
+}
+
+#message-input {
+    min-height: 1;
+}
+
+#send-button {
+    min-height: 1;
+    min-width: 8;
+}
+
+/* Compact layout adjustments */
+.compact-layout #input-panel {
+    height: 3;
+    min-height: 3;
+}
+
+.compact-layout #chat-panel {
+    height: 1fr;
+    min-height: 10;
+}
+
+/* Very small screen adjustments */
+Screen {
+    min-width: 30;
+    min-height: 12;
+}
+
+/* Extra compact layout for tiny screens */
+.ultra-compact #input-panel {
+    height: 2;
+    min-height: 2;
+    padding: 0;
+}
+
+.ultra-compact #chat-panel {
+    height: 1fr;
+    min-height: 8;
+    padding: 0 1;
+}
+
+.ultra-compact #message-input {
+    width: 65%;
+}
+
+.ultra-compact #send-button {
+    width: 35%;
+    margin-left: 0;
+}
+
+/* Footer adjustments for small screens */
+Footer {
+    height: 1;
+    overflow: hidden;
+}
+
+/* Model Selector Modal Styles */
+#model-selector {
+    width: 80%;
+    height: 70%;
+    background: $surface;
+    border: solid $primary;
+    margin: 2;
+    padding: 1;
+    min-width: 50;
+    min-height: 15;
+}
+
+/* Responsive model selector for small screens */
+Screen.compact-layout #model-selector {
+    width: 95%;
+    height: 85%;
+    margin: 1;
+    padding: 0;
+}
+
+#selector-title {
+    dock: top;
+    height: 1;
+    text-align: center;
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+
+#models-table {
+    height: 100%;
+    border: solid $accent;
+    scrollbar-background: $surface;
+    scrollbar-color: $primary;
+}
+
+#selector-buttons {
+    dock: bottom;
+    height: 3;
+    margin-top: 1;
+    align: center middle;
+}
+
+#select-btn {
+    margin-right: 2;
+}
+
+#cancel-btn {
+    margin-left: 2;
 }
 
 /* Dark theme adjustments */
