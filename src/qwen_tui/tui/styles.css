@@ -13,13 +13,9 @@
     height: 100%;
 }
 
-#chat-scroll-container {
+#chat-scroll {
     height: 1fr;
     min-height: 0;
-}
-
-#chat-panel {
-    height: 100%;
     padding: 1;
     border: solid $primary;
     overflow-y: auto;
@@ -128,7 +124,7 @@
     min-height: 3;
 }
 
-.compact-layout #chat-panel {
+.compact-layout #chat-scroll {
     height: 1fr;
     min-height: 10;
 }
@@ -146,7 +142,7 @@ Screen {
     padding: 0;
 }
 
-.ultra-compact #chat-panel {
+.ultra-compact #chat-scroll {
     height: 1fr;
     min-height: 8;
     padding: 0 1;
@@ -261,4 +257,83 @@ Button.-primary {
 
 Button.-primary:hover {
     background: $warning;
+}
+
+/* Thinking and Action Widget Styles */
+.thinking-widget {
+    background: $surface;
+    border-left: solid $warning;
+    padding: 0 1;
+    margin: 0 0 1 0;
+    color: $text;
+    cursor: pointer;
+}
+
+.thinking-widget:hover {
+    background: $accent;
+}
+
+.action-widget {
+    background: $surface;
+    border-left: solid $primary;
+    padding: 0 1;
+    margin: 0 0 1 0;
+    color: $text;
+    border-radius: 1;
+}
+
+.action-widget.running {
+    border-left: solid $warning;
+    background: lighten($warning, 80%);
+}
+
+.action-widget.completed {
+    border-left: solid $success;
+    background: lighten($success, 80%);
+}
+
+.action-widget.error {
+    border-left: solid $error;
+    background: lighten($error, 80%);
+}
+
+/* Thinking animation styles */
+.thinking-widget .spinner {
+    color: $warning;
+    text-style: bold;
+}
+
+.thinking-widget .expanded {
+    background: $surface;
+    border: solid $accent;
+    padding: 1;
+    margin: 1 0;
+}
+
+/* Action status indicators */
+.action-widget .status-running {
+    color: $warning;
+    text-style: bold;
+}
+
+.action-widget .status-completed {
+    color: $success;
+    text-style: bold;
+}
+
+.action-widget .status-error {
+    color: $error;
+    text-style: bold;
+}
+
+.action-widget .parameters {
+    color: $text;
+    text-style: italic;
+    opacity: 0.7;
+}
+
+.action-widget .result {
+    color: $text;
+    margin-top: 1;
+    padding-left: 2;
 }
