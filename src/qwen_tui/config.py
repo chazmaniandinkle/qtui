@@ -183,9 +183,20 @@ def load_config() -> Config:
                     
                     config_data.update(file_config)
                     break
+            except yaml.YAMLError as e:
+                # YAML parsing error
+                print(f"Warning: Invalid YAML syntax in {config_path}: {e}")
+                print("Using default configuration instead.")
+            except FileNotFoundError:
+                # File disappeared between exists check and open
+                print(f"Warning: Config file {config_path} not found (may have been removed)")
+            except PermissionError:
+                # No read permission
+                print(f"Warning: No permission to read config file {config_path}")
             except Exception as e:
-                # Log warning but continue with defaults
+                # Other unexpected errors
                 print(f"Warning: Failed to load config from {config_path}: {e}")
+                print("Using default configuration instead.")
     
     # Override with environment variables
     env_overrides = {}
@@ -198,7 +209,11 @@ def load_config() -> Config:
     if ollama_host := os.getenv("QWEN_TUI_OLLAMA_HOST"):
         env_overrides.setdefault("ollama", {})["host"] = ollama_host
     if ollama_port := os.getenv("QWEN_TUI_OLLAMA_PORT"):
-        env_overrides.setdefault("ollama", {})["port"] = int(ollama_port)
+        try:
+            env_overrides.setdefault("ollama", {})["port"] = int(ollama_port)
+        except ValueError:
+            print(f"Warning: Invalid port number in QWEN_TUI_OLLAMA_PORT: {ollama_port}")
+            print("Using default port instead.")
     if ollama_model := os.getenv("QWEN_TUI_OLLAMA_MODEL"):
         env_overrides.setdefault("ollama", {})["model"] = ollama_model
     
@@ -206,13 +221,21 @@ def load_config() -> Config:
     if lm_host := os.getenv("QWEN_TUI_LM_STUDIO_HOST"):
         env_overrides.setdefault("lm_studio", {})["host"] = lm_host
     if lm_port := os.getenv("QWEN_TUI_LM_STUDIO_PORT"):
-        env_overrides.setdefault("lm_studio", {})["port"] = int(lm_port)
+        try:
+            env_overrides.setdefault("lm_studio", {})["port"] = int(lm_port)
+        except ValueError:
+            print(f"Warning: Invalid port number in QWEN_TUI_LM_STUDIO_PORT: {lm_port}")
+            print("Using default port instead.")
     
     # vLLM settings
     if vllm_host := os.getenv("QWEN_TUI_VLLM_HOST"):
         env_overrides.setdefault("vllm", {})["host"] = vllm_host
     if vllm_port := os.getenv("QWEN_TUI_VLLM_PORT"):
-        env_overrides.setdefault("vllm", {})["port"] = int(vllm_port)
+        try:
+            env_overrides.setdefault("vllm", {})["port"] = int(vllm_port)
+        except ValueError:
+            print(f"Warning: Invalid port number in QWEN_TUI_VLLM_PORT: {vllm_port}")
+            print("Using default port instead.")
     if vllm_model := os.getenv("QWEN_TUI_VLLM_MODEL"):
         env_overrides.setdefault("vllm", {})["model"] = vllm_model
     
@@ -235,7 +258,13 @@ def load_config() -> Config:
     # Merge configurations: defaults < file < environment
     final_config = {**config_data, **env_overrides}
     
-    return Config(**final_config)
+    try:
+        return Config(**final_config)
+    except Exception as e:
+        print(f"Error: Invalid configuration data: {e}")
+        print("Using default configuration. Please check your config file and environment variables.")
+        # Return default config as fallback
+        return Config()
 
 
 def save_config(config: Config, path: Optional[Path] = None) -> None:

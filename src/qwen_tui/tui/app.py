@@ -20,6 +20,7 @@ from ..backends.base import LLMRequest, BackendStatus
 from ..config import Config
 from ..logging import get_main_logger
 from ..exceptions import QwenTUIError
+from ..history import ConversationHistory
 
 
 class QwenTUIApp(App):
@@ -58,6 +59,10 @@ class QwenTUIApp(App):
         self.min_width = 60  # Minimum width before switching to compact layout
         self.min_height = 20  # Minimum height for proper functionality
         
+        # History management
+        self.history_manager = ConversationHistory(config)
+        self.current_session_id: Optional[str] = None
+        
     async def on_mount(self) -> None:
         """Initialize the application when mounted."""
         self.logger.info("Qwen-TUI application starting")
@@ -82,6 +87,13 @@ class QwenTUIApp(App):
         
         # Check initial layout
         self.check_layout()
+        
+        # Start a new conversation session
+        try:
+            self.current_session_id = await self.history_manager.start_new_session()
+            self.logger.info("Started conversation session", session_id=self.current_session_id)
+        except Exception as e:
+            self.logger.warning("Failed to start conversation session", error=str(e))
     
     def on_resize(self, event) -> None:
         """Handle terminal resize events."""
@@ -170,7 +182,8 @@ class QwenTUIApp(App):
             with Horizontal():
                 # Main chat area
                 with Vertical(id="chat-area"):
-                    yield ChatPanel(id="chat-panel")
+                    with ScrollableContainer(id="chat-scroll-container"):
+                        yield ChatPanel(id="chat-panel")
                     yield InputPanel(id="input-panel")
                 
                 # Side panels (initially hidden)
@@ -191,7 +204,18 @@ class QwenTUIApp(App):
         self.message_count = 0
         chat_panel = self.query_one("#chat-panel", ChatPanel)
         chat_panel.clear_messages()
+        
+        # Start a new session
+        asyncio.create_task(self._start_new_session())
         self.logger.info("Started new conversation")
+    
+    async def _start_new_session(self) -> None:
+        """Start a new conversation session."""
+        try:
+            self.current_session_id = await self.history_manager.start_new_session()
+            self.logger.info("Started new conversation session", session_id=self.current_session_id)
+        except Exception as e:
+            self.logger.warning("Failed to start new conversation session", error=str(e))
     
     def action_toggle_backends(self) -> None:
         """Toggle backend panel visibility."""
@@ -236,6 +260,11 @@ class QwenTUIApp(App):
         - /switch <backend>: Switch to specific backend
         - /clear: Clear conversation
         - /quit: Quit application
+        
+        History Commands:
+        - /history: Show recent conversations
+        - /load <session_id>: Load a conversation
+        - /export <format>: Export current conversation (json/txt)
         """
         
         chat_panel = self.query_one("#chat-panel", ChatPanel)
@@ -277,6 +306,13 @@ class QwenTUIApp(App):
         if not message.strip():
             return
         
+        # Validate message input
+        validation_error = self._validate_message_input(message)
+        if validation_error:
+            chat_panel = self.query_one("#chat-panel", ChatPanel)
+            chat_panel.add_error_message(validation_error)
+            return
+        
         # Handle commands
         if message.startswith('/'):
             await self.handle_command(message)
@@ -294,47 +330,50 @@ class QwenTUIApp(App):
         chat_panel.add_user_message(message)
         
         # Add to conversation history
-        self.conversation_history.append({"role": "user", "content": message})
+        user_message = {"role": "user", "content": message}
+        self.conversation_history.append(user_message)
         self.message_count += 1
         
+        # Save to persistent history
         try:
-            # Create request
+            backend_name = backend.name if backend else None
+            model_name = getattr(backend, '_current_model', None) if backend else None
+            await self.history_manager.save_message(user_message, backend_name, model_name)
+        except Exception as e:
+            self.logger.warning("Failed to save user message to history", error=str(e))
+        
+        # Add a placeholder assistant message and track its index
+        chat_panel.add_assistant_message("")
+        assistant_index = len(chat_panel.messages) - 1
+        try:
             request = LLMRequest(
                 messages=self.conversation_history.copy(),
                 stream=True
             )
-            
-            # Show typing indicator
             chat_panel.show_typing_indicator()
-            
-            # Generate response
             response_content = ""
             async for response in self.backend_manager.generate(request):
                 if response.is_partial and response.delta:
                     response_content += response.delta
-                    chat_panel.update_assistant_message(response_content)
+                    chat_panel.update_assistant_message(response_content, index=assistant_index)
                 elif response.content and not response.is_partial:
                     response_content = response.content
-                    chat_panel.update_assistant_message(response_content)
-            
-            # Hide typing indicator
+                    chat_panel.update_assistant_message(response_content, index=assistant_index)
             chat_panel.hide_typing_indicator()
-            
-            # Add assistant message to history
             if response_content:
-                self.conversation_history.append({"role": "assistant", "content": response_content})
+                assistant_message = {"role": "assistant", "content": response_content}
+                self.conversation_history.append(assistant_message)
                 self.message_count += 1
-                
-        except QwenTUIError as e:
-            chat_panel.hide_typing_indicator()
-            chat_panel.add_error_message(f"Error: {str(e)}")
-            self.logger.error("Failed to generate response", error=str(e))
+                try:
+                    backend_name = backend.name if backend else None
+                    model_name = getattr(backend, '_current_model', None) if backend else None
+                    await self.history_manager.save_message(assistant_message, backend_name, model_name)
+                except Exception as e:
+                    self.logger.warning("Failed to save assistant message to history", error=str(e))
         except Exception as e:
             chat_panel.hide_typing_indicator()
-            chat_panel.add_error_message(f"Unexpected error: {str(e)}")
-            self.logger.error("Unexpected error during message generation", 
-                            error=str(e), 
-                            error_type=type(e).__name__)
+            chat_panel.add_error_message(f"Error: {str(e)}")
+            self.logger.error("Error during message send", error=str(e))
     
     async def handle_command(self, command: str) -> None:
         """Handle slash commands."""
@@ -375,8 +414,183 @@ class QwenTUIApp(App):
             # This would need implementation in backend manager
             chat_panel.add_system_message(f"Backend switching to {backend_name} (not implemented yet)")
         
+        elif cmd == "history":
+            # Show recent conversation sessions
+            asyncio.create_task(self._show_conversation_history())
+        
+        elif cmd == "load" and args:
+            # Load a specific conversation session
+            session_id = args[0]
+            asyncio.create_task(self._load_conversation_session(session_id))
+        
+        elif cmd == "export" and args:
+            # Export current or specified session
+            if len(args) >= 2:
+                session_id, format_type = args[0], args[1]
+            else:
+                session_id, format_type = self.current_session_id or "", args[0] if args else "json"
+            asyncio.create_task(self._export_conversation_session(session_id, format_type))
+        
         else:
             chat_panel.add_error_message(f"Unknown command: /{cmd}")
+    
+    async def _show_conversation_history(self) -> None:
+        """Show recent conversation sessions."""
+        try:
+            sessions = await self.history_manager.get_recent_sessions(limit=10)
+            chat_panel = self.query_one("#chat-panel", ChatPanel)
+            
+            if not sessions:
+                chat_panel.add_system_message("No conversation history found.")
+                return
+            
+            history_text = "Recent Conversations:\n\n"
+            for session in sessions:
+                started = session.get("started_at", "Unknown")[:16].replace("T", " ")
+                preview = session.get("preview", "No content")
+                message_count = session.get("message_count", 0)
+                session_id = session.get("session_id", "unknown")
+                
+                history_text += f"• {started} - {message_count} messages\n"
+                history_text += f"  ID: {session_id}\n"
+                history_text += f"  Preview: {preview}\n\n"
+            
+            history_text += "Use '/load <session_id>' to load a conversation."
+            chat_panel.add_system_message(history_text)
+            
+        except Exception as e:
+            chat_panel = self.query_one("#chat-panel", ChatPanel)
+            chat_panel.add_error_message(f"Failed to load conversation history: {str(e)}")
+    
+    async def _load_conversation_session(self, session_id: str) -> None:
+        """Load a specific conversation session."""
+        try:
+            messages = await self.history_manager.load_session(session_id)
+            chat_panel = self.query_one("#chat-panel", ChatPanel)
+            
+            if not messages:
+                chat_panel.add_error_message(f"Session '{session_id}' not found.")
+                return
+            
+            # Clear current conversation
+            self.conversation_history.clear()
+            chat_panel.clear_messages()
+            
+            # Load messages into current conversation
+            self.conversation_history = messages.copy()
+            self.message_count = len(messages)
+            
+            # Display loaded messages
+            for message in messages:
+                role = message.get("role", "unknown")
+                content = message.get("content", "")
+                
+                if role == "user":
+                    chat_panel.add_user_message(content)
+                elif role == "assistant":
+                    chat_panel.add_assistant_message(content)
+                elif role == "system":
+                    chat_panel.add_system_message(content)
+            
+            # Update current session
+            self.current_session_id = session_id
+            chat_panel.add_system_message(f"Loaded conversation session: {session_id}")
+            self.logger.info("Loaded conversation session", session_id=session_id)
+            
+        except Exception as e:
+            chat_panel = self.query_one("#chat-panel", ChatPanel)
+            chat_panel.add_error_message(f"Failed to load session: {str(e)}")
+    
+    async def _export_conversation_session(self, session_id: str, format_type: str) -> None:
+        """Export a conversation session."""
+        try:
+            if not session_id:
+                session_id = self.current_session_id
+            
+            if not session_id:
+                chat_panel = self.query_one("#chat-panel", ChatPanel)
+                chat_panel.add_error_message("No session to export.")
+                return
+            
+            # Create export path
+            from pathlib import Path
+            export_dir = Path.home() / "Downloads"
+            export_dir.mkdir(exist_ok=True)
+            
+            export_file = export_dir / f"qwen_conversation_{session_id}.{format_type}"
+            
+            success = await self.history_manager.export_session(session_id, export_file, format_type)
+            
+            chat_panel = self.query_one("#chat-panel", ChatPanel)
+            if success:
+                chat_panel.add_system_message(f"Exported conversation to: {export_file}")
+            else:
+                chat_panel.add_error_message(f"Failed to export conversation.")
+                
+        except Exception as e:
+            chat_panel = self.query_one("#chat-panel", ChatPanel)
+            chat_panel.add_error_message(f"Export failed: {str(e)}")
+    
+    def _format_user_friendly_error(self, error: Exception) -> str:
+        """Format QwenTUI errors in a user-friendly way."""
+        error_str = str(error)
+        
+        # Handle specific backend errors
+        if "not found" in error_str.lower() and "model" in error_str.lower():
+            return f"Model Error: {error_str}\n\nTip: Try using Ctrl+M to select an available model."
+        
+        elif "connection" in error_str.lower() or "connect" in error_str.lower():
+            return f"Connection Error: {error_str}\n\nTip: Check if your backend service is running."
+        
+        elif "timeout" in error_str.lower():
+            return f"Timeout Error: {error_str}\n\nTip: The request took too long. Try a shorter message or check your connection."
+        
+        elif "unauthorized" in error_str.lower() or "api key" in error_str.lower():
+            return f"Authentication Error: {error_str}\n\nTip: Check your API key configuration."
+        
+        else:
+            return f"Error: {error_str}"
+    
+    def _format_unexpected_error(self, error: Exception) -> str:
+        """Format unexpected errors in a user-friendly way."""
+        error_type = type(error).__name__
+        error_str = str(error)
+        
+        # Common network errors
+        if "ConnectionError" in error_type or "TimeoutError" in error_type:
+            return f"Network Error: Unable to connect to the backend service.\n\nTip: Check if the service is running and accessible."
+        
+        # Memory or resource errors
+        elif "MemoryError" in error_type:
+            return f"Memory Error: Not enough memory to process the request.\n\nTip: Try a shorter message or restart the application."
+        
+        # Generic unexpected error
+        else:
+            return f"Unexpected Error ({error_type}): {error_str}\n\nTip: Try restarting the application. If the problem persists, check the logs."
+    
+    def _validate_message_input(self, message: str) -> Optional[str]:
+        """Validate user message input and return error message if invalid."""
+        message = message.strip()
+        
+        # Check message length
+        if len(message) > 32000:  # Reasonable limit for most models
+            return "Message too long. Please keep messages under 32,000 characters."
+        
+        # Check for excessively long lines (could indicate formatting issues)
+        lines = message.split('\n')
+        max_line_length = max(len(line) for line in lines) if lines else 0
+        if max_line_length > 2000:
+            return "Message contains very long lines. Please break up long lines for better readability."
+        
+        # Check for excessive newlines (could indicate paste formatting issues)
+        if message.count('\n') > 200:
+            return "Message contains too many line breaks. Please format the text more concisely."
+        
+        # Check for only whitespace or special characters
+        if not any(c.isalnum() for c in message):
+            return "Message must contain some alphanumeric characters."
+        
+        return None
 
 
 class ChatPanel(Static):
@@ -407,14 +621,16 @@ class ChatPanel(Static):
         self.messages.append(("error", content))
         self.refresh_display()
     
-    def update_assistant_message(self, content: str) -> None:
-        """Update the last assistant message (for streaming)."""
-        if self.messages and self.messages[-1][0] == "assistant":
+    def update_assistant_message(self, content: str, index: int = None) -> None:
+        """Update the assistant message at a specific index (for streaming)."""
+        if index is not None and 0 <= index < len(self.messages):
+            self.messages[index] = ("assistant", content)
+        elif self.messages:
             self.messages[-1] = ("assistant", content)
         else:
             self.messages.append(("assistant", content))
         self.refresh_display()
-    
+
     def show_typing_indicator(self) -> None:
         """Show typing indicator."""
         self.typing_indicator_visible = True
@@ -432,9 +648,8 @@ class ChatPanel(Static):
         self.refresh_display()
     
     def refresh_display(self) -> None:
-        """Refresh the chat display."""
+        """Refresh the chat display and scroll to the end."""
         content = ""
-        
         for role, message in self.messages:
             if role == "user":
                 content += f"[bold blue]You:[/bold blue] {message}\n\n"
@@ -444,11 +659,14 @@ class ChatPanel(Static):
                 content += f"[dim italic]{message}[/dim italic]\n\n"
             elif role == "error":
                 content += f"[bold red]Error:[/bold red] {message}\n\n"
-        
         if self.typing_indicator_visible:
             content += "[dim]Assistant is typing...[/dim]"
-        
         self.update(content)
+        self.scroll_visible()
+        # Scroll to the end if inside a ScrollableContainer
+        parent = self.parent
+        if parent and hasattr(parent, "scroll_end"):
+            parent.scroll_end(animate=False)
 
 
 class InputPanel(Container):

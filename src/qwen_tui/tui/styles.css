@@ -10,10 +10,16 @@
 #chat-area {
     width: 70%;
     layout: vertical;
+    height: 100%;
+}
+
+#chat-scroll-container {
+    height: 1fr;
+    min-height: 0;
 }
 
 #chat-panel {
-    height: 90%;
+    height: 100%;
     padding: 1;
     border: solid $primary;
     overflow-y: auto;
@@ -22,7 +28,9 @@
 }
 
 #input-panel {
-    height: 10%;
+    height: auto;
+    min-height: 3;
+    max-height: 5;
     padding: 1;
     layout: horizontal;
 }

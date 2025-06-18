@@ -131,11 +131,41 @@ def list_backends():
         # Import here to avoid circular imports
         from ..backends.manager import BackendManager
         
-        with console.status("[bold blue]Checking backends..."):
-            backend_manager = BackendManager(config)
+        async def _run_backends_list(backend_manager):
+            # Get backend status without re-initializing
+            results = {}
             
-            # Get backend status
-            results = asyncio.run(backend_manager.discover_backends())
+            # Check all backend types
+            from ..config import BackendType
+            for backend_type in BackendType:
+                if backend_type in backend_manager.backends:
+                    # Backend is already initialized
+                    backend = backend_manager.backends[backend_type]
+                    try:
+                        backend_info = await backend.get_info()
+                        results[backend_type] = {
+                            "available": True,
+                            "host": backend_info.host,
+                            "port": backend_info.port,
+                            "model": backend_info.model,
+                            "notes": "Ready to use"
+                        }
+                    except Exception as e:
+                        results[backend_type] = {
+                            "available": False,
+                            "error": str(e)
+                        }
+                else:
+                    # Backend not initialized - likely unavailable
+                    results[backend_type] = {
+                        "available": False,
+                        "error": "Backend not available"
+                    }
+            
+            return results
+        
+        with console.status("[bold blue]Checking backends..."):
+            results = asyncio.run(_run_with_cleanup(config, _run_backends_list))
         
         # Create status table
         table = Table(title="Available Backends")
@@ -188,8 +218,10 @@ def test_backends():
         
         console.print("[bold blue]Testing backend connectivity...[/bold blue]\n")
         
-        backend_manager = BackendManager(config)
-        results = asyncio.run(backend_manager.test_all_backends())
+        async def _run_backends_test(backend_manager):
+            return await backend_manager.test_all_backends()
+        
+        results = asyncio.run(_run_with_cleanup(config, _run_backends_test))
         
         for backend_type, result in results.items():
             backend_name = backend_type.value.title()
@@ -322,9 +354,7 @@ def list_models(
         config = get_config()
         from ..backends.manager import BackendManager
         
-        async def _run_list():
-            backend_manager = await _get_initialized_backend_manager(config)
-            
+        async def _run_list(backend_manager):
             if recommended:
                 models_data = await backend_manager.get_recommended_models()
                 _display_recommended_models(models_data)
@@ -345,7 +375,7 @@ def list_models(
                 _display_models_table(all_models, "All Available Models")
         
         with console.status("[bold blue]Loading models..."):
-            asyncio.run(_run_list())
+            asyncio.run(_run_with_cleanup(config, _run_list))
                 
     except Exception as e:
         console.print(f"[red]Error listing models: {e}[/red]")
@@ -520,13 +550,12 @@ def show_current_models():
     try:
         config = get_config()
         
-        async def _run_current():
-            backend_manager = await _get_initialized_backend_manager(config)
+        async def _run_current(backend_manager):
             current_models = await backend_manager.get_current_models()
             _display_current_models(current_models)
         
         with console.status("[bold blue]Getting current models..."):
-            asyncio.run(_run_current())
+            asyncio.run(_run_with_cleanup(config, _run_current))
             
     except Exception as e:
         console.print(f"[red]Error getting current models: {e}[/red]")

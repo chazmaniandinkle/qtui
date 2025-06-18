@@ -163,10 +163,28 @@ class OllamaBackend(LLMBackend):
                 
                 if response.status != 200:
                     error_text = await response.text()
-                    raise BackendError(
-                        f"Ollama request failed: HTTP {response.status} - {error_text}",
-                        backend_name=self.name
-                    )
+                    
+                    # Parse error for better messages
+                    error_message = f"Ollama request failed: HTTP {response.status} - {error_text}"
+                    
+                    # Provide helpful messages for common errors
+                    if response.status == 404 and "not found" in error_text:
+                        model_name = request.model or self.ollama_config.model
+                        available_models = []
+                        try:
+                            available_models = await self.get_available_models()
+                        except:
+                            pass
+                        
+                        error_message = f"Model '{model_name}' not found in Ollama. "
+                        if available_models:
+                            error_message += f"Available models: {', '.join(available_models[:3])}"
+                            if len(available_models) > 3:
+                                error_message += f" (and {len(available_models) - 3} more)"
+                        else:
+                            error_message += f"Try running 'ollama pull {model_name}' first."
+                    
+                    raise BackendError(error_message, backend_name=self.name)
                 
                 if request.stream:
                     # Handle streaming response
