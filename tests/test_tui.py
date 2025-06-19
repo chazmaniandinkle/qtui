@@ -5,7 +5,7 @@ import pytest
 import asyncio
 from unittest.mock import Mock, AsyncMock, patch
 
-from qwen_tui.tui.app import QwenTUIApp, ChatPanel, InputPanel
+from qwen_tui.tui import QwenTUIApp, ChatPanel, InputPanel
 from qwen_tui.backends.manager import BackendManager
 from qwen_tui.config import Config
 from qwen_tui.exceptions import QwenTUIError

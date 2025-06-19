@@ -113,6 +113,30 @@ export QWEN_TUI_OLLAMA_MODEL=qwen2.5-coder:7b
 export QWEN_TUI_LOG_LEVEL=DEBUG
 ```
 
+
+### Additional Backend Configuration
+
+For vLLM and OpenRouter, specify connection details in `config.yaml` or via environment variables.
+
+```yaml
+vllm:
+  host: localhost
+  port: 8000
+  model: Qwen/Qwen2.5-Coder-7B-Instruct
+openrouter:
+  api_key: YOUR_API_KEY
+  model: qwen/qwen-2.5-coder-32b-instruct
+```
+
+Set via environment variables if preferred:
+
+```bash
+export QWEN_TUI_VLLM_HOST=localhost
+export QWEN_TUI_VLLM_PORT=8000
+export QWEN_TUI_OPENROUTER_MODEL=qwen/qwen-2.5-coder-32b-instruct
+export OPENROUTER_API_KEY=<key>
+```
+
 ## Development
 
 ### Project Structure
