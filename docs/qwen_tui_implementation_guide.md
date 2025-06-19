@@ -83,17 +83,17 @@ class LLMResponse(BaseModel):
 class LLMBackend(ABC):
     @abstractmethod
     async def generate(
-        self, 
+        self,
         messages: List[Dict],
         tools: Optional[List[Dict]] = None,
         stream: bool = True
     ) -> AsyncGenerator[LLMResponse, None]:
         pass
-    
+
     @abstractmethod
     async def health_check(self) -> bool:
         pass
-    
+
     @property
     @abstractmethod
     def backend_type(self) -> str:
@@ -187,7 +187,7 @@ class EnhancedAssistant(Assistant):
     def __init__(self, backend_manager: BackendManager, **kwargs):
         self.backend_manager = backend_manager
         super().__init__(**kwargs)
-    
+
     async def plan_act_observe(self, user_input: str):
         # Implement Claude Code-style ReAct loop
         pass
@@ -226,7 +226,7 @@ from textual.widgets import Header, Footer, Input, RichLog
 
 class QwenTUIApp(App):
     CSS_PATH = "styles.css"
-    
+
     def compose(self):
         yield Header()
         yield ChatPanel()
@@ -309,7 +309,7 @@ class PermissionGate:
     async def assess_risk(self, tool_name: str, args: Dict) -> RiskLevel:
         # Implement risk assessment logic
         pass
-    
+
     async def request_approval(self, action: str, risk: RiskLevel) -> bool:
         # Handle user approval workflow
         pass

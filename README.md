@@ -190,7 +190,7 @@ Agent: I'll use the filesystem tools to search for files.
 ### Popular MCP Servers
 
 - **Filesystem Tools**: File operations and search
-- **Web Tools**: Web search and URL fetching  
+- **Web Tools**: Web search and URL fetching
 - **Database Tools**: SQL queries and schema inspection
 - **Git Tools**: Version control operations
 - **Custom Tools**: Build your own MCP servers
@@ -247,11 +247,11 @@ class MyBackend(LLMBackend):
     async def generate(self, messages, tools=None, stream=True):
         # Implementation here
         pass
-    
+
     async def health_check(self):
         # Health check implementation
         pass
-    
+
     @property
     def backend_type(self):
         return "my_backend"
@@ -282,7 +282,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 📖 [Documentation](docs/)
+- 📖 [Documentation](docs/README.md)
 - 🐛 [Issues](https://github.com/your-org/qwen-tui/issues)
 - 💬 [Discussions](https://github.com/your-org/qwen-tui/discussions)
 
