@@ -34,7 +34,7 @@ def main():
     total_checks = 6
     
     # Install in development mode
-    if run_command("python -m pip install -e .", "Installing Qwen-TUI in development mode"):
+    if run_command("python -m pip install -e .[dev]", "Installing Qwen-TUI in development mode"):
         success_count += 1
     
     # Test basic CLI functionality
