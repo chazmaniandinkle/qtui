@@ -1,0 +1,81 @@
+# Example Qwen-TUI configuration with MCP integration
+# This file demonstrates how to configure MCP servers for use with Qwen-TUI
+
+# Standard backend configuration
+preferred_backends: ["ollama", "lm_studio"]
+
+ollama:
+  host: "localhost"
+  port: 11434
+  model: "qwen2.5-coder:latest"
+
+lm_studio:
+  host: "localhost"
+  port: 1234
+
+# MCP (Model Context Protocol) configuration
+mcp:
+  # Enable MCP integration
+  enabled: true
+  
+  # Automatically discover and connect to servers
+  auto_discover: true
+  
+  # Prefix MCP tool names with server name for clarity
+  tool_prefix: true
+  
+  # Maximum concurrent MCP tool calls
+  max_concurrent_calls: 5
+  
+  # MCP server configurations
+  servers:
+    # Example filesystem tools server
+    - name: "filesystem"
+      url: "ws://localhost:3001"
+      enabled: true
+      timeout: 30
+      tools: ["read_file", "write_file", "list_directory", "search_files"]
+      retry_attempts: 3
+      retry_delay: 1.0
+      health_check_interval: 60
+    
+    # Example web tools server
+    - name: "web_tools"
+      url: "ws://localhost:3002"
+      enabled: true
+      timeout: 60
+      tools: ["fetch_url", "search_web", "scrape_page"]
+      auth:
+        Authorization: "Bearer your-api-key-here"
+    
+    # Example git tools server (disabled by default)
+    - name: "git_tools"
+      url: "ws://localhost:3003"
+      enabled: false
+      timeout: 30
+      # tools: null means load all available tools
+    
+    # Example database tools server
+    - name: "database"
+      url: "wss://secure-mcp-server.example.com:443/ws"
+      enabled: true
+      timeout: 45
+      tools: ["query_db", "schema_info", "table_list"]
+      auth:
+        Authorization: "Bearer your-secure-token"
+        X-API-Key: "your-api-key"
+
+# Security configuration
+security:
+  profile: "balanced"
+  # Add MCP tool operations to require approval
+  require_approval_for: 
+    - "file_delete"
+    - "shell_exec" 
+    - "network_request"
+    - "mcp_tool_call"  # Require approval for all MCP tool calls
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "human"
