@@ -11,4 +11,5 @@ This directory contains supplementary guides and design references for Qwen-TUI.
 - **IMPLEMENTATION_ROADMAP.md** - history of features and future plans
 - **MCP_IMPLEMENTATION_SUMMARY.md** - detailed summary of MCP integration
 - **HANDOFF.md** - context for the existing thinking system
+- **WEBUI_IMPLEMENTATION_ROADMAP.md** - tasks for adding a browser-based interface
 
