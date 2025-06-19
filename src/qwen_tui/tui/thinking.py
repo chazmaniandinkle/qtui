@@ -180,11 +180,26 @@ class ThinkingManager:
 
                 request = LLMRequest(messages=messages, stream=True)
 
+                # Accumulate the full response so we can filter think tags
+                full_response = ""
+
                 async for response in self.protocol_client.generate(request):
                     if response.is_partial and response.delta:
-                        yield response.delta
+                        full_response += response.delta
                     elif response.content and not response.is_partial:
-                        yield response.content
+                        full_response += response.content
+
+                if full_response:
+                    visible_content, thinking_content = self._filter_thinking_tags(
+                        full_response
+                    )
+
+                    if thinking_content:
+                        self.state.full_thoughts += thinking_content
+                        self._update_thinking("Processing internal reasoning...")
+
+                    if visible_content.strip():
+                        yield visible_content
 
             elif self.current_agent:
                 # Use ReAct agent for sophisticated processing
