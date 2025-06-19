@@ -48,9 +48,11 @@ class LMStudioBackend(LLMBackend):
             headers["Authorization"] = f"Bearer {self.lm_studio_config.api_key}"
         
         timeout = aiohttp.ClientTimeout(total=self._connection_timeout)
+        # Enable usage of proxy settings defined in environment variables.
         self.session = aiohttp.ClientSession(
             timeout=timeout,
-            headers=headers
+            headers=headers,
+            trust_env=True,
         )
         
         # Test connection and get initial model info
@@ -60,12 +62,17 @@ class LMStudioBackend(LLMBackend):
             self._status = BackendStatus.CONNECTED
             self.logger.info("LM Studio backend initialized successfully")
         except Exception as e:
+            if self.session:
+                await self.session.close()
+                self.session = None
             self._status = BackendStatus.ERROR
-            self.logger.error("Failed to initialize LM Studio backend", error=str(e))
+            self.logger.error(
+                "Failed to initialize LM Studio backend", error=str(e)
+            )
             raise BackendConnectionError(
                 f"Failed to connect to LM Studio at {self.base_url}",
                 backend_name=self.name,
-                cause=e
+                cause=e,
             )
     
     async def cleanup(self) -> None:

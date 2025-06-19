@@ -32,14 +32,25 @@ class OpenRouterBackend(LLMBackend):
             "Content-Type": "application/json",
         }
         timeout = aiohttp.ClientTimeout(total=self._connection_timeout)
-        self.session = aiohttp.ClientSession(timeout=timeout, headers=headers)
+        # Enable proxy usage via environment variables so that the backend works
+        # in restricted network environments where direct access is blocked.
+        self.session = aiohttp.ClientSession(
+            timeout=timeout, headers=headers, trust_env=True
+        )
         try:
             await self.health_check()
             self._status = BackendStatus.CONNECTED
             self.logger.info("OpenRouter backend initialized")
         except Exception as e:
+            # Ensure the session is closed if initialization fails to avoid
+            # leaking open connections in tests and during runtime.
+            if self.session:
+                await self.session.close()
+                self.session = None
             self._status = BackendStatus.ERROR
-            self.logger.error("Failed to initialize OpenRouter backend", error=str(e))
+            self.logger.error(
+                "Failed to initialize OpenRouter backend", error=str(e)
+            )
             raise BackendConnectionError(
                 f"Failed to connect to OpenRouter at {self.base_url}",
                 backend_name=self.name,
