@@ -137,7 +137,7 @@ vllm:
   model: Qwen/Qwen2.5-Coder-7B-Instruct
 openrouter:
   api_key: YOUR_API_KEY
-  model: qwen/qwen-2.5-coder-32b-instruct
+  model: deepseek/deepseek-r1-0528-qwen3-8b
 ```
 
 Set via environment variables if preferred:
@@ -145,7 +145,7 @@ Set via environment variables if preferred:
 ```bash
 export QWEN_TUI_VLLM_HOST=localhost
 export QWEN_TUI_VLLM_PORT=8000
-export QWEN_TUI_OPENROUTER_MODEL=qwen/qwen-2.5-coder-32b-instruct
+export QWEN_TUI_OPENROUTER_MODEL=deepseek/deepseek-r1-0528-qwen3-8b
 export OPENROUTER_API_KEY=<key>
 ```
 

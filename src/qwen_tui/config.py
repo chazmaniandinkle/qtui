@@ -67,7 +67,10 @@ class VLLMConfig(BaseModel):
 class OpenRouterConfig(BaseModel):
     """OpenRouter backend configuration."""
     api_key: str = Field(..., description="OpenRouter API key")
-    model: str = Field(default="qwen/qwen-2.5-coder-32b-instruct", description="Model to use")
+    model: str = Field(
+        default="deepseek/deepseek-r1-0528-qwen3-8b",
+        description="Model to use",
+    )
     timeout: int = Field(default=300, description="Request timeout in seconds")
     base_url: str = Field(default="https://openrouter.ai/api/v1", description="API base URL")
 
