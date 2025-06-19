@@ -275,21 +275,25 @@ def load_config() -> Config:
                     config_data.update(file_config)
                     break
             except yaml.YAMLError as e:
-                # YAML parsing error
-                print(f"Warning: Invalid YAML syntax in {config_path}: {e}")
-                print("Using default configuration instead.")
+                # YAML parsing error - use stderr to avoid TUI interference
+                import sys
+                sys.stderr.write(f"Warning: Invalid YAML syntax in {config_path}: {e}\n")
+                sys.stderr.write("Using default configuration instead.\n")
             except FileNotFoundError:
                 # File disappeared between exists check and open
-                print(
-                    f"Warning: Config file {config_path} not found (may have been removed)"
+                import sys
+                sys.stderr.write(
+                    f"Warning: Config file {config_path} not found (may have been removed)\n"
                 )
             except PermissionError:
                 # No read permission
-                print(f"Warning: No permission to read config file {config_path}")
+                import sys
+                sys.stderr.write(f"Warning: No permission to read config file {config_path}\n")
             except Exception as e:
                 # Other unexpected errors
-                print(f"Warning: Failed to load config from {config_path}: {e}")
-                print("Using default configuration instead.")
+                import sys
+                sys.stderr.write(f"Warning: Failed to load config from {config_path}: {e}\n")
+                sys.stderr.write("Using default configuration instead.\n")
 
     # Override with environment variables
     env_overrides = {}
@@ -305,10 +309,11 @@ def load_config() -> Config:
         try:
             env_overrides.setdefault("ollama", {})["port"] = int(ollama_port)
         except ValueError:
-            print(
-                f"Warning: Invalid port number in QWEN_TUI_OLLAMA_PORT: {ollama_port}"
+            import sys
+            sys.stderr.write(
+                f"Warning: Invalid port number in QWEN_TUI_OLLAMA_PORT: {ollama_port}\n"
             )
-            print("Using default port instead.")
+            sys.stderr.write("Using default port instead.\n")
     if ollama_model := os.getenv("QWEN_TUI_OLLAMA_MODEL"):
         env_overrides.setdefault("ollama", {})["model"] = ollama_model
 
@@ -319,8 +324,9 @@ def load_config() -> Config:
         try:
             env_overrides.setdefault("lm_studio", {})["port"] = int(lm_port)
         except ValueError:
-            print(f"Warning: Invalid port number in QWEN_TUI_LM_STUDIO_PORT: {lm_port}")
-            print("Using default port instead.")
+            import sys
+            sys.stderr.write(f"Warning: Invalid port number in QWEN_TUI_LM_STUDIO_PORT: {lm_port}\n")
+            sys.stderr.write("Using default port instead.\n")
 
     # vLLM settings
     if vllm_host := os.getenv("QWEN_TUI_VLLM_HOST"):
@@ -329,8 +335,9 @@ def load_config() -> Config:
         try:
             env_overrides.setdefault("vllm", {})["port"] = int(vllm_port)
         except ValueError:
-            print(f"Warning: Invalid port number in QWEN_TUI_VLLM_PORT: {vllm_port}")
-            print("Using default port instead.")
+            import sys
+            sys.stderr.write(f"Warning: Invalid port number in QWEN_TUI_VLLM_PORT: {vllm_port}\n")
+            sys.stderr.write("Using default port instead.\n")
     if vllm_model := os.getenv("QWEN_TUI_VLLM_MODEL"):
         env_overrides.setdefault("vllm", {})["model"] = vllm_model
 
@@ -369,7 +376,8 @@ def load_config() -> Config:
             if servers:
                 env_overrides.setdefault("mcp", {})["servers"] = servers
         except Exception:
-            print(f"Warning: Invalid MCP servers configuration: {mcp_servers}")
+            import sys
+            sys.stderr.write(f"Warning: Invalid MCP servers configuration: {mcp_servers}\n")
 
     # Merge configurations: defaults < file < environment
     final_config = {**config_data, **env_overrides}
@@ -377,9 +385,10 @@ def load_config() -> Config:
     try:
         return Config(**final_config)
     except Exception as e:
-        print(f"Error: Invalid configuration data: {e}")
-        print(
-            "Using default configuration. Please check your config file and environment variables."
+        import sys
+        sys.stderr.write(f"Error: Invalid configuration data: {e}\n")
+        sys.stderr.write(
+            "Using default configuration. Please check your config file and environment variables.\n"
         )
         # Return default config as fallback
         return Config()

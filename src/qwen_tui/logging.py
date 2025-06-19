@@ -45,17 +45,36 @@ class BackendProcessor:
         return event_dict
 
 
-def setup_logging(config: LoggingConfig) -> None:
+def setup_logging(config: LoggingConfig, tui_mode: bool = False) -> None:
     """Setup structured logging based on configuration."""
     # Clear any existing structlog configuration
     structlog.reset_defaults()
     
     # Configure standard library logging
-    logging.basicConfig(
-        format="%(message)s",
-        stream=sys.stdout,
-        level=getattr(logging, config.level.value),
-    )
+    # In TUI mode, don't use stdout to avoid interfering with the TUI
+    if tui_mode:
+        # In TUI mode, ensure we have a log file
+        if not config.file:
+            # Create a default log file for TUI mode
+            import tempfile
+            import os
+            log_dir = os.path.join(tempfile.gettempdir(), "qwen-tui")
+            os.makedirs(log_dir, exist_ok=True)
+            config.file = os.path.join(log_dir, "qwen-tui.log")
+        
+        # Don't configure console logging in TUI mode
+        logging.basicConfig(
+            format="%(message)s",
+            level=getattr(logging, config.level.value),
+            handlers=[]  # No handlers for stdout in TUI mode
+        )
+    else:
+        # Normal CLI mode - use stdout
+        logging.basicConfig(
+            format="%(message)s",
+            stream=sys.stdout,
+            level=getattr(logging, config.level.value),
+        )
     
     # Setup file logging if specified
     if config.file:
@@ -274,9 +293,9 @@ def get_backend_logger(backend_name: str) -> QwenTUILogger:
     return _backend_loggers[backend_name]
 
 
-def configure_logging(config: LoggingConfig) -> None:
+def configure_logging(config: LoggingConfig, tui_mode: bool = False) -> None:
     """Configure logging system with the provided configuration."""
-    setup_logging(config)
+    setup_logging(config, tui_mode)
     
     # Log configuration
     logger = get_main_logger()

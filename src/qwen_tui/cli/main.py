@@ -85,13 +85,13 @@ def start(
         config = get_config()
         logger = get_main_logger()
         
+        # Reconfigure logging for TUI mode BEFORE any backend initialization
+        configure_logging(config.logging, tui_mode=True)
+        
         with console.status("[bold green]Starting Qwen-TUI..."):
             # Import here to avoid circular imports
             from ..backends.manager import BackendManager
             from ..tui.app import QwenTUIApp
-            
-            # Initialize backend manager
-            backend_manager = BackendManager(config)
             
             # Override backend preference if specified
             if backend:
@@ -105,20 +105,26 @@ def start(
             
             logger.info("Qwen-TUI starting", backend=backend, model=model)
             
+            # Initialize backend manager (now with TUI-safe logging)
+            backend_manager = BackendManager(config)
+            
             # Start the TUI application
             app_instance = QwenTUIApp(backend_manager, config)
             app_instance.run()
             
     except KeyboardInterrupt:
-        console.print("\n[yellow]Shutting down...[/yellow]")
+        # Use stderr to avoid TUI interference
+        sys.stderr.write("\nShutting down...\n")
         log_shutdown()
     except QwenTUIError as e:
-        console.print(f"[red]Error: {e}[/red]")
+        # Use stderr to avoid TUI interference  
+        sys.stderr.write(f"Error: {e}\n")
         sys.exit(1)
     except Exception as e:
         logger = get_main_logger()
         logger.error("Unexpected error during startup", error=str(e), error_type=type(e).__name__)
-        console.print(f"[red]Unexpected error: {e}[/red]")
+        # Use stderr to avoid TUI interference
+        sys.stderr.write(f"Unexpected error: {e}\n")
         sys.exit(1)
 
 
