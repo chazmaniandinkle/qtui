@@ -1,246 +1,213 @@
 """
-Permission manager integration for the TUI interface.
+TUI Permission Manager - Bridge between UI and core permission system.
 
-Bridges the permission system with the UI components for interactive permission requests.
+Provides async permission handling with user interaction for tool execution.
 """
 import asyncio
-from typing import Optional, Dict, Any, Callable, Awaitable
 from dataclasses import dataclass
+from typing import Any, Dict, Optional, Callable, Awaitable
 
-from ..agents.permissions import PermissionManager, RiskAssessment, PermissionAction
+from ..agents.permissions import PermissionManager, RiskAssessment, RiskLevel, PermissionAction
 from ..logging import get_main_logger
-from .permission_dialog import (
-    PermissionDialog, 
-    AlwaysAllowDialog, 
-    get_permission_preferences
-)
+from .permission_dialog import PermissionDialog, PermissionPreferences
 
 
 @dataclass
 class PermissionResult:
     """Result of a permission request."""
     allowed: bool
-    remember_decision: bool = False
-    user_cancelled: bool = False
+    always: bool
+    assessment: RiskAssessment
 
 
 class TUIPermissionManager:
-    """Permission manager that integrates with the TUI interface."""
+    """TUI-aware permission manager with interactive dialogs."""
     
     def __init__(self, app, working_directory: Optional[str] = None, yolo_mode: bool = False):
         self.app = app
-        self.logger = get_main_logger()
         self.core_manager = PermissionManager(working_directory, yolo_mode)
-        self.preferences = get_permission_preferences()
+        self.preferences = PermissionPreferences()
+        self.logger = get_main_logger()
         
         # Track pending permission requests to avoid duplicates
-        self.pending_requests = set()
+        self._pending_requests: Dict[str, asyncio.Future] = {}
+    
+    @property
+    def yolo_mode(self) -> bool:
+        """Check if YOLO mode is enabled."""
+        return self.core_manager.yolo_mode
+    
+    @yolo_mode.setter
+    def yolo_mode(self, value: bool):
+        """Set YOLO mode."""
+        self.core_manager.yolo_mode = value
+        if value:
+            self.logger.warning("YOLO mode enabled - all permissions bypassed")
+        else:
+            self.logger.info("YOLO mode disabled - permissions restored")
     
     async def request_permission(self, tool_name: str, parameters: Dict[str, Any]) -> PermissionResult:
         """Request permission for a tool operation with UI interaction."""
-        # Create unique key for this request to prevent duplicates
-        request_key = f"{tool_name}:{hash(str(sorted(parameters.items())))}"
+        # Create unique request key to prevent duplicate dialogs
+        request_key = f"{tool_name}:{hash(frozenset(parameters.items()) if parameters else frozenset())}"
         
-        if request_key in self.pending_requests:
-            self.logger.debug("Duplicate permission request blocked", tool=tool_name)
-            return PermissionResult(allowed=False, user_cancelled=True)
+        # If there's already a pending request for this exact operation, wait for it
+        if request_key in self._pending_requests:
+            self.logger.debug(f"Waiting for existing permission request: {request_key}")
+            return await self._pending_requests[request_key]
         
-        self.pending_requests.add(request_key)
+        # Create new permission request
+        future = asyncio.Future()
+        self._pending_requests[request_key] = future
         
         try:
-            # Get risk assessment from core permission manager
-            assessment = self.core_manager.assess_tool_permission(tool_name, parameters)
-            
-            # Handle different permission actions
-            if assessment.action == PermissionAction.ALLOW:
-                result = PermissionResult(allowed=True)
-                self.core_manager.log_permission_decision(
-                    tool_name, parameters, assessment, "auto_allowed"
-                )
-                return result
-            
-            elif assessment.action == PermissionAction.BLOCK:
-                result = PermissionResult(allowed=False)
-                self.core_manager.log_permission_decision(
-                    tool_name, parameters, assessment, "auto_blocked"
-                )
-                # Show blocking message to user
-                await self._show_blocked_message(tool_name, assessment)
-                return result
-            
-            else:  # PermissionAction.PROMPT
-                # Check user preferences first
-                if self.preferences.is_always_allowed(tool_name):
-                    result = PermissionResult(allowed=True)
-                    self.core_manager.log_permission_decision(
-                        tool_name, parameters, assessment, "always_allowed"
-                    )
-                    return result
-                
-                if self.preferences.is_always_denied(tool_name):
-                    result = PermissionResult(allowed=False)
-                    self.core_manager.log_permission_decision(
-                        tool_name, parameters, assessment, "always_denied"
-                    )
-                    return result
-                
-                # Show permission dialog
-                return await self._show_permission_dialog(tool_name, parameters, assessment)
-        
-        finally:
-            self.pending_requests.discard(request_key)
-    
-    async def _show_permission_dialog(self, tool_name: str, parameters: Dict[str, Any], 
-                                    assessment: RiskAssessment) -> PermissionResult:
-        """Show the permission dialog and handle user response."""
-        try:
-            # Create and show permission dialog
-            dialog = PermissionDialog(tool_name, parameters, assessment)
-            decision = await self.app.push_screen_wait(dialog)
-            
-            if decision == "allow":
-                # Check if user wants to remember this decision
-                remember_result = await self._ask_remember_decision(tool_name)
-                
-                if remember_result == "always_allow":
-                    self.preferences.set_always_allow(tool_name)
-                    remember_decision = True
-                else:
-                    remember_decision = False
-                
-                result = PermissionResult(allowed=True, remember_decision=remember_decision)
-                self.core_manager.log_permission_decision(
-                    tool_name, parameters, assessment, "user_allowed"
-                )
-                return result
-            
-            elif decision == "deny":
-                # Check if user wants to remember this decision
-                remember_result = await self._ask_remember_decision(tool_name)
-                
-                if remember_result == "always_allow":  # This would be "always_deny" for deny
-                    # Note: We don't implement "always deny" to avoid accidentally blocking useful operations
-                    remember_decision = False
-                else:
-                    remember_decision = False
-                
-                result = PermissionResult(allowed=False, remember_decision=remember_decision)
-                self.core_manager.log_permission_decision(
-                    tool_name, parameters, assessment, "user_denied"
-                )
-                return result
-            
-            else:
-                # User cancelled/escaped
-                result = PermissionResult(allowed=False, user_cancelled=True)
-                self.core_manager.log_permission_decision(
-                    tool_name, parameters, assessment, "user_cancelled"
-                )
-                return result
-        
-        except Exception as e:
-            self.logger.error("Error showing permission dialog", error=str(e))
-            # Fail safe - deny permission on error
-            result = PermissionResult(allowed=False, user_cancelled=True)
-            self.core_manager.log_permission_decision(
-                tool_name, parameters, assessment, "dialog_error"
-            )
+            result = await self._handle_permission_request(tool_name, parameters)
+            future.set_result(result)
             return result
-    
-    async def _ask_remember_decision(self, tool_name: str) -> str:
-        """Ask user if they want to remember their decision."""
-        try:
-            dialog = AlwaysAllowDialog(tool_name)
-            result = await self.app.push_screen_wait(dialog)
-            return result or "ask_each_time"
         except Exception as e:
-            self.logger.error("Error showing remember decision dialog", error=str(e))
-            return "ask_each_time"
+            future.set_exception(e)
+            raise
+        finally:
+            # Clean up pending request
+            self._pending_requests.pop(request_key, None)
     
-    async def _show_blocked_message(self, tool_name: str, assessment: RiskAssessment):
-        """Show a message when an operation is automatically blocked."""
-        try:
-            # Add a system message to the chat explaining why the operation was blocked
-            if hasattr(self.app, 'add_error_message'):
-                message = f"🚫 Operation blocked: {tool_name}\n\n"
-                if assessment.reasons:
-                    message += "Reasons:\n"
-                    for reason in assessment.reasons:
-                        message += f"  • {reason}\n"
-                
-                if assessment.warnings:
-                    message += "\nWarnings:\n" 
-                    for warning in assessment.warnings:
-                        message += f"  • {warning}\n"
-                
-                self.app.add_error_message(message)
-        except Exception as e:
-            self.logger.error("Error showing blocked message", error=str(e))
-    
-    def enable_yolo_mode(self) -> None:
-        """Enable YOLO mode (bypass all permissions)."""
-        self.core_manager.enable_yolo_mode()
-    
-    def disable_yolo_mode(self) -> None:
-        """Disable YOLO mode (re-enable permissions)."""
-        self.core_manager.disable_yolo_mode()
-    
-    def get_permission_summary(self) -> str:
-        """Get a summary of recent permission decisions."""
-        return self.core_manager.get_permission_summary()
-    
-    def clear_preferences(self, tool_name: Optional[str] = None) -> None:
-        """Clear permission preferences for a tool or all tools."""
-        if tool_name:
-            self.preferences.clear_preference(tool_name)
+    async def _handle_permission_request(self, tool_name: str, parameters: Dict[str, Any]) -> PermissionResult:
+        """Handle individual permission request."""
+        # Get core risk assessment
+        assessment = self.core_manager.assess_tool_permission(tool_name, parameters)
+        
+        self.logger.debug(f"Permission request for {tool_name}: {assessment.risk_level.value} risk")
+        
+        # Check user preferences first
+        preference = self.preferences.get_preference(tool_name)
+        if preference is not None:
+            self.logger.debug(f"Using saved preference for {tool_name}: {preference}")
+            return PermissionResult(
+                allowed=preference,
+                always=True,  # This was a saved preference
+                assessment=assessment
+            )
+        
+        # Handle based on risk level and action
+        if assessment.action == PermissionAction.ALLOW:
+            # Auto-allow safe operations
+            return PermissionResult(allowed=True, always=False, assessment=assessment)
+        
+        elif assessment.action == PermissionAction.BLOCK:
+            # Auto-block critical operations
+            self.logger.warning(f"Blocked {tool_name} operation: {assessment.risk_level.value} risk")
+            # Still show dialog to inform user why it was blocked
+            await self._show_blocked_dialog(tool_name, parameters, assessment)
+            return PermissionResult(allowed=False, always=False, assessment=assessment)
+        
+        elif assessment.action == PermissionAction.PROMPT:
+            # Show interactive permission dialog
+            return await self._show_permission_dialog(tool_name, parameters, assessment)
+        
         else:
-            self.preferences.always_allow_tools.clear()
-            self.preferences.always_deny_tools.clear()
-        self.preferences.save_preferences()
+            # Unknown action, default to deny
+            self.logger.error(f"Unknown permission action: {assessment.action}")
+            return PermissionResult(allowed=False, always=False, assessment=assessment)
+    
+    async def _show_permission_dialog(self, tool_name: str, parameters: Dict[str, Any], assessment: RiskAssessment) -> PermissionResult:
+        """Show interactive permission dialog."""
+        # Create future to capture dialog result
+        result_future = asyncio.Future()
+        
+        def on_dialog_result(allowed: bool, always: bool):
+            """Handle dialog result."""
+            if always:
+                # Save preference
+                self.preferences.set_preference(tool_name, allowed)
+                self.logger.info(f"Saved permission preference for {tool_name}: {allowed}")
+            
+            result = PermissionResult(allowed=allowed, always=always, assessment=assessment)
+            result_future.set_result(result)
+        
+        # Create and show dialog
+        dialog = PermissionDialog(
+            tool_name=tool_name,
+            parameters=parameters,
+            assessment=assessment,
+            callback=on_dialog_result
+        )
+        
+        self.app.push_screen(dialog)
+        
+        # Wait for user decision
+        return await result_future
+    
+    async def _show_blocked_dialog(self, tool_name: str, parameters: Dict[str, Any], assessment: RiskAssessment):
+        """Show informational dialog for blocked operations."""
+        # For now, just log and add a system message
+        # Could be extended to show an informational modal
+        message = f"🛡️ Blocked {tool_name}: {assessment.risk_level.value.upper()} risk operation"
+        if hasattr(self.app, 'add_system_message'):
+            self.app.add_system_message(message)
+        else:
+            self.logger.warning(message)
+    
+    def get_permission_status(self) -> Dict[str, Any]:
+        """Get current permission system status."""
+        return {
+            "yolo_mode": self.yolo_mode,
+            "preferences": self.preferences.get_summary(),
+            "pending_requests": len(self._pending_requests),
+            "permission_history": len(self.core_manager.permission_history)
+        }
+    
+    def clear_preference(self, tool_name: str):
+        """Clear permission preference for a tool."""
+        self.preferences.clear_preference(tool_name)
+        self.logger.info(f"Cleared permission preference for {tool_name}")
+    
+    def clear_all_preferences(self):
+        """Clear all permission preferences."""
+        self.preferences.clear_all()
+        self.logger.info("Cleared all permission preferences")
 
 
 class PermissionIntegrator:
-    """Integrates permission checking into the tool execution pipeline."""
+    """Integrates permission checking into tool execution pipeline."""
     
-    def __init__(self, tui_permission_manager: TUIPermissionManager):
-        self.permission_manager = tui_permission_manager
+    def __init__(self, permission_manager: TUIPermissionManager):
+        self.permission_manager = permission_manager
         self.logger = get_main_logger()
     
     async def check_tool_permission(self, tool_name: str, parameters: Dict[str, Any]) -> bool:
-        """Check if a tool operation is permitted."""
+        """Check permission for tool execution."""
         try:
             result = await self.permission_manager.request_permission(tool_name, parameters)
-            return result.allowed
+            
+            if result.allowed:
+                self.logger.debug(f"Permission granted for {tool_name}")
+                return True
+            else:
+                self.logger.info(f"Permission denied for {tool_name}")
+                return False
+                
         except Exception as e:
-            self.logger.error("Permission check failed", tool=tool_name, error=str(e))
+            self.logger.error(f"Permission check failed for {tool_name}", error=str(e))
             # Fail safe - deny permission on error
             return False
-    
-    async def wrap_tool_execution(self, tool_name: str, parameters: Dict[str, Any], 
-                                execute_func: Callable[[], Awaitable[Any]]) -> Any:
-        """Wrap tool execution with permission checking."""
-        # Check permission first
-        if not await self.check_tool_permission(tool_name, parameters):
-            raise PermissionError(f"Permission denied for {tool_name}")
-        
-        # Execute the tool
-        return await execute_func()
 
 
-# Global TUI permission manager instance
-_global_tui_permission_manager: Optional[TUIPermissionManager] = None
+# Global permission manager instance
+_global_permission_manager: Optional[TUIPermissionManager] = None
 
 
-def get_tui_permission_manager(app=None, working_directory: Optional[str] = None, 
-                              yolo_mode: bool = False) -> TUIPermissionManager:
-    """Get or create the global TUI permission manager."""
-    global _global_tui_permission_manager
-    if _global_tui_permission_manager is None and app is not None:
-        _global_tui_permission_manager = TUIPermissionManager(app, working_directory, yolo_mode)
-    return _global_tui_permission_manager
+def get_permission_manager() -> Optional[TUIPermissionManager]:
+    """Get the global permission manager instance."""
+    return _global_permission_manager
 
 
-def set_tui_permission_manager(manager: TUIPermissionManager) -> None:
-    """Set the global TUI permission manager."""
-    global _global_tui_permission_manager
-    _global_tui_permission_manager = manager
+def set_permission_manager(manager: TUIPermissionManager):
+    """Set the global permission manager instance."""
+    global _global_permission_manager
+    _global_permission_manager = manager
+
+
+def get_permission_integrator() -> Optional[PermissionIntegrator]:
+    """Get permission integrator if available."""
+    manager = get_permission_manager()
+    return PermissionIntegrator(manager) if manager else None

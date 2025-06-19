@@ -34,7 +34,7 @@ except ImportError:
     ThinkingManager = None
 
 # Import permission system
-from .permission_manager import TUIPermissionManager, get_tui_permission_manager, set_tui_permission_manager
+from .permission_manager import TUIPermissionManager, get_permission_manager, set_permission_manager
 
 
 class QwenTUIApp(App):
@@ -91,7 +91,7 @@ class QwenTUIApp(App):
         working_directory = getattr(config, 'working_directory', None)
         yolo_mode = getattr(config, 'yolo_mode', False)
         self.permission_manager = TUIPermissionManager(self, working_directory, yolo_mode)
-        set_tui_permission_manager(self.permission_manager)
+        set_permission_manager(self.permission_manager)
         
     async def on_mount(self) -> None:
         """Initialize the application when mounted."""
@@ -446,30 +446,42 @@ class QwenTUIApp(App):
     def action_show_permissions(self) -> None:
         """Show permission system status and controls."""
         try:
-            summary = self.permission_manager.get_permission_summary()
+            status = self.permission_manager.get_permission_status()
             preferences = self.permission_manager.preferences
             
             permissions_text = "🔒 Permission System Status:\n\n"
             
-            # Always allowed tools
-            if preferences.always_allow_tools:
-                permissions_text += "✅ Always Allowed Tools:\n"
-                for tool in sorted(preferences.always_allow_tools):
-                    permissions_text += f"  • {tool}\n"
-                permissions_text += "\n"
-            
             # YOLO mode status
-            if self.permission_manager.core_manager.yolo_mode:
+            if status["yolo_mode"]:
                 permissions_text += "⚠️ YOLO Mode: ENABLED (All permissions bypassed)\n\n"
             else:
                 permissions_text += "🛡️ Security Mode: ACTIVE\n\n"
             
-            # Recent decisions
-            permissions_text += summary
+            # Always allowed tools
+            if preferences.always_allow:
+                permissions_text += "✅ Always Allowed Tools:\n"
+                for tool in sorted(preferences.always_allow):
+                    permissions_text += f"  • {tool}\n"
+                permissions_text += "\n"
             
-            permissions_text += "\n💡 Commands:\n"
+            # Always denied tools
+            if preferences.always_deny:
+                permissions_text += "❌ Always Denied Tools:\n"
+                for tool in sorted(preferences.always_deny):
+                    permissions_text += f"  • {tool}\n"
+                permissions_text += "\n"
+            
+            # Status summary
+            prefs_summary = status["preferences"]
+            permissions_text += f"📊 Statistics:\n"
+            permissions_text += f"  • Total preferences: {prefs_summary['total_preferences']}\n"
+            permissions_text += f"  • Pending requests: {status['pending_requests']}\n"
+            permissions_text += f"  • Permission history: {status['permission_history']}\n\n"
+            
+            permissions_text += "💡 Commands:\n"
             permissions_text += "• /permissions clear <tool>: Clear tool preferences\n"
             permissions_text += "• /permissions yolo: Toggle YOLO mode\n"
+            permissions_text += "• Ctrl+P: Show this status\n"
             
             permission_message = ChatMessage("system", permissions_text)
             chat_scroll = self.query_one("#chat-scroll", ScrollableContainer)
@@ -771,18 +783,18 @@ class QwenTUIApp(App):
                 return
                 
             tool_name = args[1]
-            self.permission_manager.clear_preferences(tool_name)
+            self.permission_manager.clear_preference(tool_name)
             success_msg = ChatMessage("system", f"Cleared preferences for tool: {tool_name}")
             await chat_scroll.mount(success_msg)
             success_msg.scroll_visible()
         
         elif subcommand == "yolo":
             # Toggle YOLO mode
-            if self.permission_manager.core_manager.yolo_mode:
-                self.permission_manager.disable_yolo_mode()
+            if self.permission_manager.yolo_mode:
+                self.permission_manager.yolo_mode = False
                 mode_msg = ChatMessage("system", "🛡️ YOLO mode disabled. Security checks re-enabled.")
             else:
-                self.permission_manager.enable_yolo_mode()
+                self.permission_manager.yolo_mode = True
                 mode_msg = ChatMessage("system", "⚠️ YOLO mode enabled. All security checks bypassed!")
             
             await chat_scroll.mount(mode_msg)

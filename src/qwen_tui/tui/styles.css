@@ -1,5 +1,122 @@
 /* Qwen-TUI Styles */
 
+/* Permission Dialog Styles */
+#permission-dialog {
+    align: center middle;
+    width: 80%;
+    max-width: 60;
+    height: auto;
+    max-height: 80%;
+    background: $surface;
+    border: thick $primary;
+    padding: 1;
+}
+
+#dialog-header {
+    height: 3;
+    width: 100%;
+    layout: horizontal;
+    align: center middle;
+    margin-bottom: 1;
+}
+
+#dialog-title {
+    content-align: center middle;
+    text-style: bold;
+    width: 1fr;
+}
+
+#dialog-content {
+    height: 1fr;
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#dialog-footer {
+    height: 3;
+    width: 100%;
+    layout: horizontal;
+    align: center middle;
+}
+
+#dialog-footer Button {
+    margin: 0 1;
+    min-width: 12;
+}
+
+/* Risk level indicators */
+.risk-safe {
+    color: $success;
+    text-style: bold;
+}
+
+.risk-low {
+    color: $warning;
+    text-style: bold;
+}
+
+.risk-medium {
+    color: $warning;
+    text-style: bold;
+}
+
+.risk-high {
+    color: $error;
+    text-style: bold;
+}
+
+.risk-critical {
+    color: $error;
+    text-style: bold reverse;
+}
+
+/* Details section */
+.details-content {
+    height: auto;
+    width: 100%;
+    padding: 1;
+    border: solid $secondary;
+    margin-top: 1;
+}
+
+.details-content.hidden {
+    display: none;
+}
+
+/* Always allow dialog */
+#always-dialog {
+    align: center middle;
+    width: 60%;
+    max-width: 40;
+    height: auto;
+    background: $surface;
+    border: thick $primary;
+    padding: 2;
+}
+
+#always-title {
+    content-align: center middle;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#always-message {
+    content-align: center middle;
+    margin-bottom: 2;
+}
+
+#always-buttons {
+    height: 3;
+    width: 100%;
+    layout: horizontal;
+    align: center middle;
+}
+
+#always-buttons Button {
+    margin: 0 1;
+    min-width: 10;
+}
+
 /* Main container */
 #main-container {
     layout: horizontal;

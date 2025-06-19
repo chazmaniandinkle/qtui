@@ -17,8 +17,8 @@ from ..logging import get_main_logger
 def _get_permission_manager():
     """Lazy import to avoid circular dependencies."""
     try:
-        from ..tui.permission_manager import get_tui_permission_manager
-        return get_tui_permission_manager()
+        from ..tui.permission_manager import get_permission_manager
+        return get_permission_manager()
     except ImportError:
         return None
 
@@ -113,9 +113,7 @@ class ToolRegistry:
             try:
                 permission_result = await permission_manager.request_permission(name, parameters)
                 if not permission_result.allowed:
-                    error_msg = "Permission denied"
-                    if permission_result.user_cancelled:
-                        error_msg = "Operation cancelled by user"
+                    error_msg = "Permission denied by user"
                     return ToolResult(
                         tool_name=name,
                         status=ToolStatus.ERROR,

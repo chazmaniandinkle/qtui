@@ -265,11 +265,27 @@ class ThinkingManager:
             
             request = LLMRequest(messages=messages, stream=True)
             
+            # Accumulate full response for think tag filtering
+            full_response = ""
+            
             async for response in self.backend_manager.generate(request):
                 if response.is_partial and response.delta:
-                    yield response.delta
+                    full_response += response.delta
                 elif response.content and not response.is_partial:
-                    yield response.content
+                    full_response += response.content
+            
+            # Apply think tag filtering to the complete response
+            if full_response:
+                visible_content, thinking_content = self._filter_thinking_tags(full_response)
+                
+                # Update thinking state with extracted thinking content
+                if thinking_content:
+                    self.state.full_thoughts += thinking_content
+                    self._update_thinking("Processing internal reasoning...")
+                
+                # Yield only the filtered visible content
+                if visible_content.strip():
+                    yield visible_content
                     
         except Exception as e:
             yield f"Error in fallback response: {str(e)}"
