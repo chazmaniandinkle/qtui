@@ -28,7 +28,7 @@ tests/test_mcp_integration.py ...................                        [100%]
 
 ### MCP Test Coverage
 - **TestMCPModels**: Protocol models and data structures (4 tests)
-- **TestMCPClient**: Client connection and communication (3 tests)  
+- **TestMCPClient**: Client connection and communication (3 tests)
 - **TestMCPToolAdapter**: Tool adapter functionality (6 tests)
 - **TestMCPIntegration**: Integration with Qwen-TUI (4 tests)
 - **TestMCPDiscovery**: Server discovery and management (2 tests)

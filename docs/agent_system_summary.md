@@ -65,8 +65,8 @@ await WriteTool().safe_execute(file_path="output.txt", content="Hello World!")
 
 # Edit files with exact string replacement
 await EditTool().safe_execute(
-    file_path="config.py", 
-    old_string="DEBUG = False", 
+    file_path="config.py",
+    old_string="DEBUG = False",
     new_string="DEBUG = True"
 )
 
@@ -96,7 +96,7 @@ await LSTool().safe_execute(path=".", recursive=True, max_depth=2)
 ```python
 # Run bash commands with security controls
 await BashTool().safe_execute(
-    command="pytest tests/", 
+    command="pytest tests/",
     description="Run test suite"
 )
 
@@ -112,7 +112,7 @@ await TaskTool().safe_execute(
 ### **Risk Assessment System**
 - **Safe Commands**: `ls`, `cat`, `git status` → Auto-approved
 - **Medium Risk**: File modifications, network operations → User prompt
-- **High Risk**: `sudo` commands, permission changes → Confirmation required  
+- **High Risk**: `sudo` commands, permission changes → Confirmation required
 - **Critical Risk**: `rm -rf /`, format commands → Blocked by default
 
 ### **Permission Controls**
@@ -154,7 +154,7 @@ schemas = tool_manager.registry.get_openai_function_schemas()
 # Run comprehensive tool tests
 python simple_agent_test.py
 
-# Test individual components  
+# Test individual components
 python -c "
 import asyncio
 from qwen_tui.tools import get_tool_manager
@@ -185,7 +185,7 @@ coding_agent = agent_factory.create_coding_agent(
 
 # Analysis agent for code exploration
 analysis_agent = agent_factory.create_analysis_agent(
-    working_directory="/path/to/project", 
+    working_directory="/path/to/project",
     analysis_type="security"
 )
 ```

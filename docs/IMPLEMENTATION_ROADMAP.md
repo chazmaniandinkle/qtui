@@ -38,8 +38,8 @@
   - ✅ Toggle functionality working
   - ❌ No real backend information display
   - ❌ No backend switching controls
-  
-- **Status Panel** - Structure exists but minimal functionality  
+
+- **Status Panel** - Structure exists but minimal functionality
   - ✅ Toggle functionality working
   - ❌ No real-time status information
   - ❌ No performance metrics
@@ -81,7 +81,7 @@
 - [x] Display backend-specific information (host, port, version)
 - [ ] Add model loading/switching UI
 
-#### 1.2 Functional Status Panel  
+#### 1.2 Functional Status Panel
 - [x] Real-time system status (memory, CPU if available)
 - [x] Connection status indicators
 - [x] Message count and session statistics
@@ -103,7 +103,7 @@
 - [x] Streaming response handling
 - [x] Error handling and recovery
 
-#### 2.2 OpenRouter Backend Implementation  
+#### 2.2 OpenRouter Backend Implementation
 - [x] API integration with authentication
 - [x] Model discovery and selection
 - [x] Rate limiting and quota management
@@ -126,7 +126,7 @@
 
 #### 3.2 Performance Monitoring
 - [ ] Request/response timing
-- [ ] Token usage statistics  
+- [ ] Token usage statistics
 - [ ] Backend performance comparison
 - [ ] Usage analytics dashboard
 
@@ -159,7 +159,7 @@
 
 #### 2.1 vLLM Backend Implementation
 - [x] Complete vLLM client integration
-- [x] Model loading and management  
+- [x] Model loading and management
 - [x] Streaming response handling
 - [x] Error handling and recovery
 
@@ -178,7 +178,7 @@
 - [ ] Analytics engine with trend detection
 - [ ] Performance dashboard UI
 
-#### 3.3 Enhanced Tool Integration  
+#### 3.3 Enhanced Tool Integration
 - [ ] Tool management interface
 - [ ] Tool configuration system
 - [ ] Tool testing framework
@@ -192,7 +192,7 @@
 ```python
 # Key data sources already available:
 - backend_manager.get_backend_info()
-- backend_manager.get_all_models()  
+- backend_manager.get_all_models()
 - backend_manager.get_current_models()
 - backend_manager.get_preferred_backend()
 ```
@@ -253,7 +253,7 @@
 
 #### **Phase 3.1: Permission System UI - COMPLETED** ✅
 1. **Permission Dialog Components** - Interactive dialogs with risk assessment
-2. **TUI Permission Manager** - Bridge between UI and core permission system  
+2. **TUI Permission Manager** - Bridge between UI and core permission system
 3. **Tool Pipeline Integration** - Permission checking before tool execution
 4. **Complete UI Integration** - Keyboard shortcuts, chat commands, visual styling
 5. **Comprehensive Testing** - All components validated and working
@@ -274,7 +274,7 @@
 
 **Qwen-TUI is now a highly functional development environment with:**
 - ✅ **Complete chat interface** with thinking system
-- ✅ **Real-time backend monitoring** with status panels  
+- ✅ **Real-time backend monitoring** with status panels
 - ✅ **Comprehensive security system** with visual permission management
 - ✅ **Sophisticated agent system** with ReAct capabilities and 11 tools
 - ✅ **Professional UI/UX** with responsive design and keyboard shortcuts
@@ -300,7 +300,7 @@
 
 - **Permission system is production-ready** - All dialogs, preferences, and integrations working
 - **Backend/Status panels have real-time data** - Just need interactive controls added
-- **Tool system is comprehensive** - 11 tools with permission integration  
+- **Tool system is comprehensive** - 11 tools with permission integration
 - **UI architecture is solid** - Follow existing patterns for new components
 - **Testing framework exists** - Use similar patterns for validation
 
@@ -308,7 +308,7 @@
 
 The codebase follows clear patterns:
 - **`/tui/`** - All UI components and TUI application logic
-- **`/agents/`** - ReAct agents with thinking and tool execution  
+- **`/agents/`** - ReAct agents with thinking and tool execution
 - **`/tools/`** - Comprehensive tool registry with 11 tools
 - **`/backends/`** - Backend management (Ollama, LM Studio, vLLM and OpenRouter implemented)
 - **Modal patterns** - Use existing `ModalScreen` patterns for new dialogs

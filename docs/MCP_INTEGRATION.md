@@ -37,7 +37,7 @@ Run your MCP servers (examples):
 # Example filesystem server
 npx @modelcontextprotocol/server-filesystem ws://localhost:3001
 
-# Example web tools server  
+# Example web tools server
 npx @modelcontextprotocol/server-web ws://localhost:3002
 ```
 
@@ -75,7 +75,7 @@ mcp:
   tool_prefix: true
   max_concurrent_calls: 5
   connection_timeout: 10
-  
+
   servers:
     - name: "filesystem"
       url: "ws://localhost:3001"
@@ -85,7 +85,7 @@ mcp:
       retry_attempts: 3
       retry_delay: 1.0
       health_check_interval: 60
-      
+
     - name: "web_tools"
       url: "wss://secure-server.com/ws"
       enabled: true
@@ -262,7 +262,7 @@ Enable debug logging for MCP:
 ```yaml
 logging:
   level: "DEBUG"
-  
+
 # Or via environment
 export QWEN_TUI_LOG_LEVEL=DEBUG
 ```
@@ -380,11 +380,11 @@ mcp:
     - name: "filesystem"
       url: "ws://localhost:3001"
       tools: ["read_file", "write_file", "search_files"]
-    
+
     - name: "git_tools"
       url: "ws://localhost:3002"
       tools: ["git_status", "git_diff", "git_commit"]
-    
+
     - name: "docker_tools"
       url: "ws://localhost:3003"
       tools: ["docker_ps", "docker_logs", "docker_exec"]
@@ -400,11 +400,11 @@ mcp:
     - name: "web_search"
       url: "ws://localhost:3001"
       tools: ["search_web", "fetch_url", "summarize_page"]
-    
+
     - name: "academic_tools"
       url: "ws://localhost:3002"
       tools: ["search_papers", "fetch_arxiv", "cite_paper"]
-    
+
     - name: "data_tools"
       url: "ws://localhost:3003"
       tools: ["analyze_csv", "plot_data", "statistics"]
