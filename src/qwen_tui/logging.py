@@ -63,6 +63,7 @@ def setup_logging(config: LoggingConfig, tui_mode: bool = False) -> None:
             config.file = os.path.join(log_dir, "qwen-tui.log")
         
         # Don't configure console logging in TUI mode
+        # Install a NullHandler so Textual doesn't add its own handler
         logging.basicConfig(
             format="%(message)s",
             level=getattr(logging, config.level.value),
@@ -92,10 +93,10 @@ def setup_logging(config: LoggingConfig, tui_mode: bool = False) -> None:
         )
         file_handler.setLevel(getattr(logging, config.level.value))
         
-        # Create a separate logger for file output
-        file_logger = logging.getLogger("qwen_tui.file")
-        file_logger.addHandler(file_handler)
-        file_logger.setLevel(getattr(logging, config.level.value))
+        # Attach file handler to the root logger so all logs are captured
+        root_logger = logging.getLogger()
+        root_logger.addHandler(file_handler)
+        root_logger.setLevel(getattr(logging, config.level.value))
     
     # Configure processors based on format
     processors = [
