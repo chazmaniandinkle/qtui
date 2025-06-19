@@ -1,5 +1,4 @@
 """Simple protocol server exposing backend and tool operations over WebSocket."""
-
 import json
 from typing import Any
 
