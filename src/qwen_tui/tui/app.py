@@ -50,7 +50,7 @@ from .permission_manager import (
     get_permission_manager,
     set_permission_manager,
 )
-
+from .backend_panel import BackendPanel
 
 class QwenTUIApp(App):
     """Main Qwen-TUI application."""
@@ -1192,7 +1192,6 @@ class BackendPanel(Container):
         """Clean up timer when unmounting."""
         if self.update_timer:
             self.update_timer.stop()
-
 
 class StatusPanel(Container):
     """Panel showing application status and metrics."""
