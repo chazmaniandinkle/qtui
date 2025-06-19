@@ -1211,8 +1211,8 @@ class StatusPanel(Container):
         """Initialize the status panel."""
         # Initial update
         await self.update_status_info()
-        # Start periodic updates every 3 seconds
-        self.update_timer = self.set_interval(3.0, self.update_status_info)
+        # Start periodic updates every 5 seconds
+        self.update_timer = self.set_interval(5.0, self.update_status_info)
 
     async def update_status_info(self) -> None:
         """Update status information display."""
@@ -1297,12 +1297,33 @@ class StatusPanel(Container):
                 import psutil
 
                 memory = psutil.virtual_memory()
+                process = psutil.Process()
                 memory_percent = memory.percent
                 memory_available = memory.available // (1024**3)  # GB
-                content.append(f"   🧠 Memory: {memory_percent:.1f}% used")
-                content.append(f"   💾 Available: {memory_available}GB")
+                proc_mem = process.memory_info().rss // (1024 ** 2)
+                content.append(
+                    f"   🧠 Memory: {memory_percent:.1f}% used, {memory_available}GB free"
+                )
+                content.append(f"   🐍 Process: {proc_mem}MB")
             except ImportError:
                 content.append("   🧠 Memory: N/A (psutil not available)")
+
+            # Backend latency information
+            if hasattr(app, "backend_manager") and app.backend_manager:
+                try:
+                    backend_info = await app.backend_manager.get_backend_info()
+                    test_results = await app.backend_manager.test_all_backends()
+                    if backend_info and test_results:
+                        content.append("   ⚡ Latency:")
+                        for bt, info in backend_info.items():
+                            name = info.get("name", getattr(bt, "value", str(bt)))
+                            result = test_results.get(bt, {})
+                            latency = result.get("response_time")
+                            if latency is not None:
+                                latency_ms = int(latency * 1000)
+                                content.append(f"      {name}: {latency_ms} ms")
+                except Exception:
+                    pass
 
             # Terminal size
             try:
