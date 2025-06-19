@@ -527,7 +527,7 @@ Screen.compact-layout #permission-dialog {
 }
 
 .operation-summary {
-    background: $surface-light;
+    background: $surface;
     border: solid $accent;
     padding: 1;
     margin-bottom: 1;
@@ -542,7 +542,7 @@ Screen.compact-layout #permission-dialog {
 }
 
 #details-section {
-    background: $surface-light;
+    background: $surface;
     border: solid $accent;
     padding: 1;
     margin-bottom: 1;
@@ -574,7 +574,7 @@ Screen.compact-layout #permission-dialog {
 }
 
 #allow-btn:hover {
-    background: $success-light;
+    background: $success;
 }
 
 #deny-btn {
@@ -584,7 +584,7 @@ Screen.compact-layout #permission-dialog {
 }
 
 #deny-btn:hover {
-    background: $error-light;
+    background: $error;
 }
 
 #details-btn {
@@ -593,7 +593,7 @@ Screen.compact-layout #permission-dialog {
 }
 
 #details-btn:hover {
-    background: $accent-light;
+    background: $accent;
 }
 
 /* Always Allow Dialog Styles */
