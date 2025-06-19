@@ -14,6 +14,7 @@ Claude Code follows a **REPL-based agent architecture** with a **Plan → Act �
 - Displays tool activities with visual indicators (`⏺` for tool use, `⎿` for completion)
 - Captures key events (Escape to edit, Ctrl+C to interrupt)
 - Uses monospace formatting appropriate for CLI
+- Cleans up stale conversation logs automatically
 
 ### 2. AI Integration (Reasoning Engine)
 - **Dual-model strategy**: Uses Claude 3.7 Sonnet for complex reasoning, Claude 3.5 Haiku for lightweight tasks
