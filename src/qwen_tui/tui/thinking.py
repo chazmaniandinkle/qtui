@@ -234,15 +234,34 @@ class ThinkingManager:
         yield {'type': 'thinking', 'content': 'Synthesizing results and preparing response...'}
         await asyncio.sleep(0.5)
         
-        # Generate response using backend
+        # Generate response using backend with thinking tag filtering
         try:
             from ..backends.base import LLMRequest
             request = LLMRequest(messages=messages, stream=True)
+            
+            # Accumulate full response to process thinking tags
+            full_response = ""
             async for response in self.backend_manager.generate(request):
                 if response.is_partial and response.delta:
-                    yield {'type': 'response', 'content': response.delta}
+                    full_response += response.delta
                 elif response.content and not response.is_partial:
-                    yield {'type': 'response', 'content': response.content}
+                    full_response = response.content
+            
+            # Process the response to extract thinking and visible content
+            visible_content, thinking_content = self._filter_thinking_tags(full_response)
+            
+            # Update thinking with extracted content if available
+            if thinking_content:
+                self.state.full_thoughts += thinking_content
+                yield {'type': 'thinking', 'content': 'Processing internal reasoning...'}
+            
+            # Yield only the visible content to the user
+            if visible_content.strip():
+                yield {'type': 'response', 'content': visible_content}
+            else:
+                # Fallback if no visible content
+                yield {'type': 'response', 'content': "I've processed your request using internal reasoning."}
+                
         except Exception as e:
             yield {'type': 'response', 'content': f"I understand your request. However, I encountered an issue connecting to the backend: {str(e)}. The thinking system is working correctly though!"}
     
@@ -276,7 +295,7 @@ class ThinkingManager:
         return messages
     
     async def _parse_agent_response(self, response: Any) -> AsyncGenerator[Dict[str, Any], None]:
-        """Parse Qwen-Agent response into structured updates."""
+        """Parse Qwen-Agent response into structured updates with thinking tag filtering."""
         # This is a simplified parser - would need to be expanded based on
         # actual Qwen-Agent response format
         
@@ -284,12 +303,24 @@ class ThinkingManager:
             choice = response.choices[0]
             
             if hasattr(choice, 'delta') and choice.delta:
-                # Streaming response content
+                # Streaming response content - filter thinking tags
                 if hasattr(choice.delta, 'content') and choice.delta.content:
-                    yield {
-                        'type': 'response',
-                        'content': choice.delta.content
-                    }
+                    visible_content, thinking_content = self._filter_thinking_tags(choice.delta.content)
+                    
+                    # If there's thinking content, update internal state
+                    if thinking_content:
+                        self.state.full_thoughts += thinking_content
+                        yield {
+                            'type': 'thinking',
+                            'content': 'Processing internal reasoning...'
+                        }
+                    
+                    # Only yield visible content
+                    if visible_content.strip():
+                        yield {
+                            'type': 'response',
+                            'content': visible_content
+                        }
                 
                 # Tool calls
                 if hasattr(choice.delta, 'tool_calls') and choice.delta.tool_calls:
@@ -382,6 +413,24 @@ class ThinkingManager:
     def get_thinking_state(self) -> ThinkingState:
         """Get current thinking state."""
         return self.state
+    
+    def _filter_thinking_tags(self, content: str) -> tuple[str, str]:
+        """Filter out <think> tags and return (visible_content, thinking_content)."""
+        import re
+        
+        # Extract all thinking content
+        thinking_pattern = r'<think>(.*?)</think>'
+        thinking_matches = re.findall(thinking_pattern, content, re.DOTALL | re.IGNORECASE)
+        thinking_content = '\n'.join(thinking_matches) if thinking_matches else ''
+        
+        # Remove thinking tags from visible content, preserving spacing
+        visible_content = re.sub(thinking_pattern, '\n\n', content, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Clean up extra whitespace - normalize multiple newlines to double newlines
+        visible_content = re.sub(r'\n{3,}', '\n\n', visible_content)
+        visible_content = re.sub(r'^\n+|\n+$', '', visible_content)  # Remove leading/trailing newlines
+        
+        return visible_content, thinking_content
     
     def reset_thinking_state(self):
         """Reset thinking state for new conversation."""

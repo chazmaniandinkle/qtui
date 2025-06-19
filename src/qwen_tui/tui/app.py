@@ -396,31 +396,41 @@ class QwenTUIApp(App):
                     assistant_msg.update_content(response_content)
                     assistant_msg.scroll_visible()
             else:
-                # Fallback to direct backend call
+                # Fallback to direct backend call with thinking tag filtering
                 request = LLMRequest(
                     messages=self.conversation_history.copy(),
                     stream=True
                 )
-                response_content = ""
+                full_response = ""
                 async for response in self.backend_manager.generate(request):
                     if response.is_partial and response.delta:
-                        response_content += response.delta
-                        assistant_msg.update_content(response_content)
-                        assistant_msg.scroll_visible()
+                        full_response += response.delta
                     elif response.content and not response.is_partial:
-                        response_content = response.content
-                        assistant_msg.update_content(response_content)
-                        assistant_msg.scroll_visible()
+                        full_response = response.content
+                
+                # Filter thinking tags from response
+                response_content, thinking_content = self._filter_thinking_tags(full_response)
+                
+                # Update thinking widget with any extracted thinking content
+                if self.current_thinking_widget and thinking_content:
+                    self.current_thinking_widget.set_full_thoughts(thinking_content)
+                    self.current_thinking_widget.update_thinking_text("Found internal reasoning in response")
+                
+                # Display only the filtered content
+                assistant_msg.update_content(response_content)
+                assistant_msg.scroll_visible()
                 
                 # Stop thinking animation for fallback
                 if self.current_thinking_widget:
                     self.current_thinking_widget.stop_thinking()
-                    self.current_thinking_widget.update_thinking_text("Used direct backend (thinking system unavailable)")
+                    self.current_thinking_widget.update_thinking_text("Used direct backend with thinking filtering")
                     self.current_thinking_widget = None
             
-            # Save assistant response
+            # Save assistant response (use filtered content)
             if response_content:
-                assistant_message = {"role": "assistant", "content": response_content}
+                # Ensure we save the filtered content without thinking tags
+                filtered_content, _ = self._filter_thinking_tags(response_content)
+                assistant_message = {"role": "assistant", "content": filtered_content}
                 self.conversation_history.append(assistant_message)
                 self.message_count += 1
                 try:
@@ -666,6 +676,24 @@ class QwenTUIApp(App):
             return "Message must contain some alphanumeric characters."
         
         return None
+    
+    def _filter_thinking_tags(self, content: str) -> tuple[str, str]:
+        """Filter out <think> tags and return (visible_content, thinking_content)."""
+        import re
+        
+        # Extract all thinking content
+        thinking_pattern = r'<think>(.*?)</think>'
+        thinking_matches = re.findall(thinking_pattern, content, re.DOTALL | re.IGNORECASE)
+        thinking_content = '\n'.join(thinking_matches) if thinking_matches else ''
+        
+        # Remove thinking tags from visible content, preserving spacing
+        visible_content = re.sub(thinking_pattern, '\n\n', content, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Clean up extra whitespace - normalize multiple newlines to double newlines
+        visible_content = re.sub(r'\n{3,}', '\n\n', visible_content)
+        visible_content = re.sub(r'^\n+|\n+$', '', visible_content)  # Remove leading/trailing newlines
+        
+        return visible_content, thinking_content
 
     def clear_chat(self):
         chat_scroll = self.query_one("#chat-scroll", ScrollableContainer)
