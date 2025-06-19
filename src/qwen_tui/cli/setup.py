@@ -311,12 +311,13 @@ def setup_openrouter_interactive(config) -> None:
     
     # Model selection
     suggested_models = [
+        "deepseek/deepseek-r1-0528-qwen3-8b",
         "qwen/qwen-2.5-coder-32b-instruct",
         "qwen/qwen-2.5-coder-14b-instruct",
         "qwen/qwen-2.5-coder-7b-instruct",
         "qwen/qwen-2.5-32b-instruct",
         "qwen/qwen-2.5-14b-instruct",
-        "qwen/qwen-2.5-7b-instruct"
+        "qwen/qwen-2.5-7b-instruct",
     ]
     
     console.print("\n[bold]Suggested Qwen models on OpenRouter:[/bold]")

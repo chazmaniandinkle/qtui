@@ -35,7 +35,7 @@ vllm:
 # OpenRouter backend configuration
 openrouter:
   api_key: ""  # Set your OpenRouter API key here or use OPENROUTER_API_KEY env var
-  model: "qwen/qwen-2.5-coder-32b-instruct"
+  model: "deepseek/deepseek-r1-0528-qwen3-8b"
   timeout: 300
   base_url: "https://openrouter.ai/api/v1"
 
