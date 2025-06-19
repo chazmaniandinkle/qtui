@@ -13,6 +13,15 @@ from .search_tools import GrepTool, GlobTool, LSTool
 from .execution_tools import BashTool, TaskTool, NotebookTool
 from ..logging import get_main_logger
 
+# Import permission system for runtime checking
+def _get_permission_manager():
+    """Lazy import to avoid circular dependencies."""
+    try:
+        from ..tui.permission_manager import get_tui_permission_manager
+        return get_tui_permission_manager()
+    except ImportError:
+        return None
+
 
 class ToolRegistry:
     """Registry for all available tools."""
@@ -97,6 +106,29 @@ class ToolRegistry:
                 status=ToolStatus.ERROR,
                 error=f"Tool not found: {name}"
             )
+        
+        # Check permissions if permission manager is available
+        permission_manager = _get_permission_manager()
+        if permission_manager:
+            try:
+                permission_result = await permission_manager.request_permission(name, parameters)
+                if not permission_result.allowed:
+                    error_msg = "Permission denied"
+                    if permission_result.user_cancelled:
+                        error_msg = "Operation cancelled by user"
+                    return ToolResult(
+                        tool_name=name,
+                        status=ToolStatus.ERROR,
+                        error=error_msg
+                    )
+            except Exception as e:
+                self.logger.error("Permission check failed", tool=name, error=str(e))
+                # Fail safe - deny on permission error
+                return ToolResult(
+                    tool_name=name,
+                    status=ToolStatus.ERROR,
+                    error=f"Permission check failed: {str(e)}"
+                )
         
         return await tool.safe_execute(**parameters)
 

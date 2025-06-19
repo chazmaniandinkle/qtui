@@ -5,17 +5,19 @@ Provides the primary user interface using Textual with chat interface,
 status monitoring, and backend management.
 """
 import asyncio
+import time
 from pathlib import Path
 from typing import Optional, Any
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Static, Button, Input, Select, DataTable, Label
+from textual.widgets import Header, Footer, Static, Button, Input, Select, DataTable, Label, Tree
+from textual.widget import Widget
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.timer import Timer
-from textual.events import Click
+from textual.events import Click, Key
 
 from ..backends.manager import BackendManager
 from ..backends.base import LLMRequest, BackendStatus
@@ -31,6 +33,9 @@ except ImportError:
     # Fallback if thinking module not available
     ThinkingManager = None
 
+# Import permission system
+from .permission_manager import TUIPermissionManager, get_tui_permission_manager, set_tui_permission_manager
+
 
 class QwenTUIApp(App):
     """Main Qwen-TUI application."""
@@ -45,7 +50,9 @@ class QwenTUIApp(App):
         Binding("ctrl+b", "toggle_backends", "Backend Panel"),
         Binding("ctrl+s", "toggle_status", "Status Panel"),
         Binding("ctrl+m", "show_model_selector", "Model Selector"),
+        Binding("ctrl+p", "show_permissions", "Permissions"),
         Binding("ctrl+h", "show_help", "Help"),
+        Binding("escape", "clear_focus", "Clear Focus"),
     ]
     
     # Reactive properties
@@ -79,6 +86,12 @@ class QwenTUIApp(App):
             self.thinking_manager = None
         self.current_thinking_widget: Optional[ThinkingWidget] = None
         self.active_action_widgets: Dict[str, ActionWidget] = {}
+        
+        # Permission system
+        working_directory = getattr(config, 'working_directory', None)
+        yolo_mode = getattr(config, 'yolo_mode', False)
+        self.permission_manager = TUIPermissionManager(self, working_directory, yolo_mode)
+        set_tui_permission_manager(self.permission_manager)
         
     async def on_mount(self) -> None:
         """Initialize the application when mounted."""
@@ -203,6 +216,9 @@ class QwenTUIApp(App):
                 # Check for ultra-compact mode (very small screens)
                 if self.size.width < 40 or self.size.height < 15:
                     main_container.add_class("ultra-compact")
+                    # Provide user guidance for ultra-compact mode
+                    if self.size.width < 30:
+                        self.add_system_message("⚠️ Terminal extremely small. Consider resizing for better experience.")
                 else:
                     main_container.remove_class("ultra-compact")
                 
@@ -213,13 +229,16 @@ class QwenTUIApp(App):
                 
                 # Make input take more space, button smaller
                 if self.size.width < 40:
-                    message_input.styles.width = "65%"
-                    send_button.styles.width = "35%"
+                    message_input.styles.width = "70%"
+                    send_button.styles.width = "30%"
                     input_panel.styles.height = "2"
+                    # Update placeholder for small screens
+                    message_input.placeholder = "Message..."
                 else:
                     message_input.styles.width = "80%"
                     send_button.styles.width = "20%"
                     input_panel.styles.height = "3"
+                    message_input.placeholder = "Type your message..."
                     
             else:
                 # Switch to normal layout
@@ -273,6 +292,8 @@ class QwenTUIApp(App):
         # Start a new session
         asyncio.create_task(self._start_new_session())
         self.logger.info("Started new conversation")
+        # Provide user feedback
+        self.add_system_message("New conversation started. (Ctrl+N)")
     
     async def _start_new_session(self) -> None:
         """Start a new conversation session."""
@@ -286,29 +307,103 @@ class QwenTUIApp(App):
         """Toggle backend panel visibility."""
         self.show_backend_panel = not self.show_backend_panel
         backend_panel = self.query_one("#backend-panel", BackendPanel)
+        side_panels = self.query_one("#side-panels")
         
         if self.show_backend_panel:
             backend_panel.remove_class("hidden")
+            side_panels.remove_class("hidden")
+            self.logger.debug("Backend panel shown")
+            # Provide user feedback
+            self.add_system_message("Backend panel shown. (Ctrl+B)")
         else:
             backend_panel.add_class("hidden")
+            # Hide side panels container if both panels are hidden
+            status_panel = self.query_one("#status-panel", StatusPanel)
+            if not self.show_status_panel or status_panel.has_class("hidden"):
+                side_panels.add_class("hidden")
+            self.logger.debug("Backend panel hidden")
+            # Provide user feedback
+            self.add_system_message("Backend panel hidden. (Ctrl+B)")
     
     def action_toggle_status(self) -> None:
         """Toggle status panel visibility."""
         self.show_status_panel = not self.show_status_panel
         status_panel = self.query_one("#status-panel", StatusPanel)
+        side_panels = self.query_one("#side-panels")
         
         if self.show_status_panel:
             status_panel.remove_class("hidden")
+            side_panels.remove_class("hidden")
+            self.logger.debug("Status panel shown")
+            # Provide user feedback
+            self.add_system_message("Status panel shown. (Ctrl+S)")
         else:
             status_panel.add_class("hidden")
+            # Hide side panels container if both panels are hidden
+            backend_panel = self.query_one("#backend-panel", BackendPanel)
+            if not self.show_backend_panel or backend_panel.has_class("hidden"):
+                side_panels.add_class("hidden")
+            self.logger.debug("Status panel hidden")
+            # Provide user feedback
+            self.add_system_message("Status panel hidden. (Ctrl+S)")
     
     def action_show_help(self) -> None:
         """Show help information."""
-        help_text = """Qwen-TUI Help:\n- Ctrl+N: New Chat\n- Ctrl+B: Backend Panel\n- Ctrl+S: Status Panel\n- Ctrl+M: Model Selector\n- Ctrl+H: Help\n- /history: Show conversation history\n- /load <session_id>: Load session\n- /export <format>: Export conversation\n"""
+        help_text = """🎮 Qwen-TUI Keyboard Shortcuts:
+
+⌨️  Global Shortcuts:
+• Ctrl+N: Start new conversation
+• Ctrl+B: Toggle backend panel
+• Ctrl+S: Toggle status panel  
+• Ctrl+M: Open model selector
+• Ctrl+P: Show permissions
+• Ctrl+H: Show this help
+• Escape: Clear input focus
+
+💬 Chat Commands:
+• /help: Show help
+• /clear: Clear conversation
+• /history: Recent conversations
+• /load <id>: Load conversation
+• /export <format>: Export chat
+• /backends: Backend information
+• /models: Open model selector
+• /permissions: Show permission status
+• /permissions clear <tool>: Clear tool preferences
+• /permissions yolo: Toggle YOLO mode
+
+💡 Tips:
+• Panels update in real-time
+• Click thinking widget to expand
+• Use Escape to enable shortcuts when typing
+• Backend panel shows connection status
+• Status panel shows system information"""
         help_message = ChatMessage("system", help_text)
         chat_scroll = self.query_one("#chat-scroll", ScrollableContainer)
         chat_scroll.mount(help_message)
         help_message.scroll_visible()
+    
+    def action_clear_focus(self) -> None:
+        """Clear focus from input widgets to enable keyboard shortcuts."""
+        try:
+            # Clear focus from the input widget
+            input_widget = self.query_one("#message-input", Input)
+            input_widget.blur()
+            self.logger.debug("Focus cleared from input widget")
+            # Provide subtle feedback
+            self.add_system_message("Focus cleared. Global shortcuts enabled.")
+        except Exception as e:
+            self.logger.debug("Failed to clear focus", error=str(e))
+            self.add_system_message("⚠️ Failed to clear focus.")
+    
+    def on_key(self, event: Key) -> None:
+        """Handle key events for debugging and global shortcuts."""
+        # Log key events for debugging (can be removed in production)
+        if event.key.startswith("ctrl+"):
+            self.logger.debug(f"Key event received at app level: {event.key}")
+        
+        # Don't consume the event, let it propagate normally
+        # This just provides debugging visibility
     
     def action_show_model_selector(self) -> None:
         """Show the model selector modal."""
@@ -347,6 +442,43 @@ class QwenTUIApp(App):
             await chat_scroll.mount(error_msg)
             error_msg.scroll_visible()
             self.logger.error("Model switch error", error=str(e))
+    
+    def action_show_permissions(self) -> None:
+        """Show permission system status and controls."""
+        try:
+            summary = self.permission_manager.get_permission_summary()
+            preferences = self.permission_manager.preferences
+            
+            permissions_text = "🔒 Permission System Status:\n\n"
+            
+            # Always allowed tools
+            if preferences.always_allow_tools:
+                permissions_text += "✅ Always Allowed Tools:\n"
+                for tool in sorted(preferences.always_allow_tools):
+                    permissions_text += f"  • {tool}\n"
+                permissions_text += "\n"
+            
+            # YOLO mode status
+            if self.permission_manager.core_manager.yolo_mode:
+                permissions_text += "⚠️ YOLO Mode: ENABLED (All permissions bypassed)\n\n"
+            else:
+                permissions_text += "🛡️ Security Mode: ACTIVE\n\n"
+            
+            # Recent decisions
+            permissions_text += summary
+            
+            permissions_text += "\n💡 Commands:\n"
+            permissions_text += "• /permissions clear <tool>: Clear tool preferences\n"
+            permissions_text += "• /permissions yolo: Toggle YOLO mode\n"
+            
+            permission_message = ChatMessage("system", permissions_text)
+            chat_scroll = self.query_one("#chat-scroll", ScrollableContainer)
+            chat_scroll.mount(permission_message)
+            permission_message.scroll_visible()
+            
+        except Exception as e:
+            self.logger.error("Error showing permissions", error=str(e))
+            self.add_error_message(f"Failed to show permissions: {str(e)}")
     
     async def send_message(self, message: str) -> None:
         """Send a message using the thinking system."""
@@ -515,6 +647,10 @@ class QwenTUIApp(App):
                 session_id, format_type = self.current_session_id or "", args[0] if args else "json"
             asyncio.create_task(self._export_conversation_session(session_id, format_type))
         
+        elif cmd == "permissions":
+            # Handle permission commands
+            await self._handle_permission_command(args)
+        
         else:
             error_message = ChatMessage("error", f"Unknown command: /{cmd}")
             await chat_scroll.mount(error_message)
@@ -613,6 +749,52 @@ class QwenTUIApp(App):
                 
         except Exception as e:
             error_msg = ChatMessage("error", f"Export failed: {str(e)}")
+            await chat_scroll.mount(error_msg)
+            error_msg.scroll_visible()
+    
+    async def _handle_permission_command(self, args: list) -> None:
+        """Handle permission-related commands."""
+        chat_scroll = self.query_one("#chat-scroll", ScrollableContainer)
+        
+        if not args:
+            # Show permission status (same as action_show_permissions)
+            self.action_show_permissions()
+            return
+        
+        subcommand = args[0].lower()
+        
+        if subcommand == "clear":
+            if len(args) < 2:
+                error_msg = ChatMessage("error", "Usage: /permissions clear <tool_name>")
+                await chat_scroll.mount(error_msg)
+                error_msg.scroll_visible()
+                return
+                
+            tool_name = args[1]
+            self.permission_manager.clear_preferences(tool_name)
+            success_msg = ChatMessage("system", f"Cleared preferences for tool: {tool_name}")
+            await chat_scroll.mount(success_msg)
+            success_msg.scroll_visible()
+        
+        elif subcommand == "yolo":
+            # Toggle YOLO mode
+            if self.permission_manager.core_manager.yolo_mode:
+                self.permission_manager.disable_yolo_mode()
+                mode_msg = ChatMessage("system", "🛡️ YOLO mode disabled. Security checks re-enabled.")
+            else:
+                self.permission_manager.enable_yolo_mode()
+                mode_msg = ChatMessage("system", "⚠️ YOLO mode enabled. All security checks bypassed!")
+            
+            await chat_scroll.mount(mode_msg)
+            mode_msg.scroll_visible()
+        
+        elif subcommand == "status":
+            # Show detailed permission status
+            self.action_show_permissions()
+        
+        else:
+            error_msg = ChatMessage("error", f"Unknown permission command: {subcommand}\n"
+                                           "Available: clear <tool>, yolo, status")
             await chat_scroll.mount(error_msg)
             error_msg.scroll_visible()
     
@@ -722,6 +904,40 @@ class InputPanel(Container):
             yield Input(placeholder="Type your message...", id="message-input")
             yield Button("Send", id="send-button", variant="primary")
     
+    def on_key(self, event: Key) -> None:
+        """Handle key events, allowing global shortcuts to work even when input has focus."""
+        # Log shortcut key events for debugging
+        logger = self.app.logger
+        
+        # Check for global shortcuts that should work even when typing
+        if event.key == "ctrl+n":
+            logger.debug("InputPanel: Ctrl+N triggered - New conversation")
+            self.app.action_new_conversation()
+            event.prevent_default()
+        elif event.key == "ctrl+b":
+            logger.debug("InputPanel: Ctrl+B triggered - Toggle backends")
+            self.app.action_toggle_backends()
+            event.prevent_default()
+        elif event.key == "ctrl+s":
+            logger.debug("InputPanel: Ctrl+S triggered - Toggle status")
+            self.app.action_toggle_status()
+            event.prevent_default()
+        elif event.key == "ctrl+m":
+            logger.debug("InputPanel: Ctrl+M triggered - Model selector")
+            self.app.action_show_model_selector()
+            event.prevent_default()
+        elif event.key == "ctrl+h":
+            logger.debug("InputPanel: Ctrl+H triggered - Help")
+            self.app.action_show_help()
+            event.prevent_default()
+        elif event.key == "escape":
+            logger.debug("InputPanel: Escape pressed - Clearing focus")
+            # Clear focus and blur the input
+            input_widget = self.query_one("#message-input", Input)
+            input_widget.blur()
+            event.prevent_default()
+        # For other keys, let them propagate normally to the input widget
+    
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle input submission."""
         message = event.value.strip()
@@ -750,17 +966,259 @@ class InputPanel(Container):
 class BackendPanel(Container):
     """Panel showing backend information and controls."""
     
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.backend_manager = None
+        self.update_timer = None
+        
     def compose(self) -> ComposeResult:
-        yield Static("Backend Panel", classes="panel-title")
-        yield Static("No backend information available", id="backend-info")
+        yield Static("🔧 Backend Panel", classes="panel-title")
+        yield ScrollableContainer(
+            Static("Initializing backends...", id="backend-status"),
+            id="backend-content"
+        )
+    
+    async def on_mount(self) -> None:
+        """Initialize the backend panel."""
+        # Get backend manager from app
+        self.backend_manager = self.app.backend_manager
+        if self.backend_manager:
+            # Initial update
+            await self.update_backend_info()
+            # Start periodic updates every 5 seconds
+            self.update_timer = self.set_interval(5.0, self.update_backend_info)
+    
+    async def update_backend_info(self) -> None:
+        """Update backend information display."""
+        if not self.backend_manager:
+            return
+            
+        try:
+            # Get backend information
+            backend_info = await self.backend_manager.get_backend_info()
+            current_models = await self.backend_manager.get_current_models()
+            status_summary = self.backend_manager.get_status_summary()
+            
+            # Build display content
+            content = []
+            
+            # Overall status
+            total = status_summary.get("total_backends", 0)
+            available = status_summary.get("available_backends", 0)
+            preferred = status_summary.get("preferred_backend", "None")
+            
+            content.append(f"📊 Status: {available}/{total} backends available")
+            content.append(f"🎯 Preferred: {preferred}")
+            content.append("")
+            
+            # Individual backend details
+            if backend_info:
+                for backend_type, info in backend_info.items():
+                    name = info.get("name", backend_type.value)
+                    status = info.get("status", "unknown")
+                    
+                    # Status indicator
+                    if status == "ready":
+                        indicator = "🟢"
+                    elif status == "error":
+                        indicator = "🔴"
+                    else:
+                        indicator = "🟡"
+                    
+                    content.append(f"{indicator} {name}")
+                    
+                    # Connection details
+                    host = info.get("host", "N/A")
+                    port = info.get("port", "N/A")
+                    content.append(f"   📡 {host}:{port}")
+                    
+                    # Current model
+                    current_model = current_models.get(backend_type.value, "None")
+                    if current_model:
+                        # Truncate long model names
+                        display_model = current_model
+                        if len(display_model) > 30:
+                            display_model = display_model[:27] + "..."
+                        content.append(f"   🤖 Model: {display_model}")
+                    else:
+                        content.append(f"   🤖 Model: None loaded")
+                    
+                    # Version and capabilities
+                    version = info.get("version", "Unknown")
+                    if version != "Unknown":
+                        content.append(f"   📋 Version: {version}")
+                    
+                    # Error information
+                    error = info.get("error")
+                    if error:
+                        error_preview = error[:50] + "..." if len(error) > 50 else error
+                        content.append(f"   ⚠️  Error: {error_preview}")
+                    
+                    content.append("")  # Empty line between backends
+            else:
+                content.append("No backend information available")
+            
+            # Update the display
+            backend_status = self.query_one("#backend-status", Static)
+            backend_status.update("\n".join(content))
+            
+        except Exception as e:
+            # Error handling
+            error_content = f"❌ Error updating backend info:\n{str(e)}"
+            backend_status = self.query_one("#backend-status", Static)
+            backend_status.update(error_content)
+    
+    def on_unmount(self) -> None:
+        """Clean up timer when unmounting."""
+        if self.update_timer:
+            self.update_timer.stop()
 
 
 class StatusPanel(Container):
     """Panel showing application status and metrics."""
     
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.update_timer = None
+        self.start_time = time.time()
+        
     def compose(self) -> ComposeResult:
-        yield Static("Status Panel", classes="panel-title")
-        yield Static("Initializing...", id="status-info")
+        yield Static("📊 Status Panel", classes="panel-title")
+        yield ScrollableContainer(
+            Static("Initializing...", id="status-display"),
+            id="status-content"
+        )
+    
+    async def on_mount(self) -> None:
+        """Initialize the status panel."""
+        # Initial update
+        await self.update_status_info()
+        # Start periodic updates every 3 seconds
+        self.update_timer = self.set_interval(3.0, self.update_status_info)
+    
+    async def update_status_info(self) -> None:
+        """Update status information display."""
+        try:
+            app = self.app
+            content = []
+            
+            # Application uptime
+            uptime_seconds = int(time.time() - self.start_time)
+            uptime_str = self._format_uptime(uptime_seconds)
+            content.append(f"⏱️  Uptime: {uptime_str}")
+            
+            # Current session info
+            if hasattr(app, 'current_session_id') and app.current_session_id:
+                session_preview = app.current_session_id[:8] + "..." if len(app.current_session_id) > 8 else app.current_session_id
+                content.append(f"💬 Session: {session_preview}")
+            else:
+                content.append("💬 Session: None")
+            
+            # Message count
+            message_count = getattr(app, 'message_count', 0)
+            content.append(f"📝 Messages: {message_count}")
+            
+            # Backend status
+            if hasattr(app, 'backend_manager') and app.backend_manager:
+                status_summary = app.backend_manager.get_status_summary()
+                total = status_summary.get("total_backends", 0)
+                available = status_summary.get("available_backends", 0)
+                content.append(f"🔧 Backends: {available}/{total} available")
+                
+                # Current backend
+                current_backend = getattr(app, 'current_backend', None)
+                if current_backend:
+                    content.append(f"🎯 Active: {current_backend}")
+                else:
+                    content.append("🎯 Active: None")
+            else:
+                content.append("🔧 Backends: Not initialized")
+            
+            content.append("")  # Empty line
+            
+            # Thinking system status
+            if hasattr(app, 'thinking_manager') and app.thinking_manager:
+                thinking_state = app.thinking_manager.get_thinking_state()
+                if thinking_state.is_thinking:
+                    content.append("🧠 Thinking: Active")
+                    if thinking_state.current_thought:
+                        thought_preview = thinking_state.current_thought[:40] + "..." if len(thinking_state.current_thought) > 40 else thinking_state.current_thought
+                        content.append(f"   💭 {thought_preview}")
+                    
+                    # Active tools
+                    if thinking_state.active_tools:
+                        tools_str = ", ".join(thinking_state.active_tools[:3])
+                        if len(thinking_state.active_tools) > 3:
+                            tools_str += "..."
+                        content.append(f"   🔧 Tools: {tools_str}")
+                else:
+                    content.append("🧠 Thinking: Idle")
+                
+                # Completed actions count
+                completed_count = len(thinking_state.completed_actions)
+                if completed_count > 0:
+                    content.append(f"   ✅ Actions: {completed_count} completed")
+            else:
+                content.append("🧠 Thinking: Not available")
+            
+            content.append("")  # Empty line
+            
+            # System information
+            content.append("💻 System:")
+            
+            # Memory usage (if available)
+            try:
+                import psutil
+                memory = psutil.virtual_memory()
+                memory_percent = memory.percent
+                memory_available = memory.available // (1024**3)  # GB
+                content.append(f"   🧠 Memory: {memory_percent:.1f}% used")
+                content.append(f"   💾 Available: {memory_available}GB")
+            except ImportError:
+                content.append("   🧠 Memory: N/A (psutil not available)")
+            
+            # Terminal size
+            try:
+                size = app.size
+                content.append(f"   📺 Terminal: {size.width}x{size.height}")
+                
+                # Layout mode
+                if hasattr(app, 'is_compact_layout'):
+                    layout_mode = "Compact" if app.is_compact_layout else "Normal"
+                    content.append(f"   🖼️  Layout: {layout_mode}")
+            except Exception:
+                content.append("   📺 Terminal: Size unknown")
+            
+            # Update the display
+            status_display = self.query_one("#status-display", Static)
+            status_display.update("\n".join(content))
+            
+        except Exception as e:
+            # Error handling
+            error_content = f"❌ Error updating status info:\n{str(e)}"
+            try:
+                status_display = self.query_one("#status-display", Static)
+                status_display.update(error_content)
+            except:
+                pass  # Fail silently if we can't even update the error
+    
+    def _format_uptime(self, seconds: int) -> str:
+        """Format uptime in a human-readable way."""
+        if seconds < 60:
+            return f"{seconds}s"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            secs = seconds % 60
+            return f"{minutes}m {secs}s"
+        else:
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            return f"{hours}h {minutes}m"
+    
+    def on_unmount(self) -> None:
+        """Clean up timer when unmounting."""
+        if self.update_timer:
+            self.update_timer.stop()
 
 
 class ModelSelectorScreen(ModalScreen):

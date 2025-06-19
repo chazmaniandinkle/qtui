@@ -324,3 +324,191 @@ Button.-primary:hover {
     margin-top: 1;
     padding-left: 2;
 }
+
+/* Permission Dialog Styles */
+#permission-dialog {
+    width: 80%;
+    height: 80%;
+    max-width: 80;
+    max-height: 25;
+    background: $surface;
+    border: solid $error;
+    padding: 2;
+    margin: 2;
+    min-width: 60;
+    min-height: 20;
+}
+
+/* Responsive permission dialog for small screens */
+Screen.compact-layout #permission-dialog {
+    width: 95%;
+    height: 90%;
+    margin: 1;
+    padding: 1;
+    min-width: 50;
+}
+
+#dialog-title {
+    dock: top;
+    height: 1;
+    text-align: center;
+    text-style: bold;
+    color: $error;
+    margin-bottom: 1;
+}
+
+.risk-indicator {
+    text-align: center;
+    text-style: bold;
+    margin-bottom: 1;
+    padding: 1;
+    border: round;
+}
+
+.risk-safe {
+    color: $success;
+    border: solid $success;
+    background: $surface;
+}
+
+.risk-low {
+    color: $warning;
+    border: solid $warning;
+    background: $surface;
+}
+
+.risk-medium {
+    color: orange;
+    border: solid orange;
+    background: $surface;
+}
+
+.risk-high {
+    color: $error;
+    border: solid $error;
+    background: $surface;
+}
+
+.risk-critical {
+    color: red;
+    border: solid red;
+    background: red 10%;
+    text-style: bold;
+}
+
+.operation-summary {
+    background: $surface-light;
+    border: solid $accent;
+    padding: 1;
+    margin-bottom: 1;
+}
+
+.warning-list {
+    background: $warning 20%;
+    border: solid $warning;
+    padding: 1;
+    margin-bottom: 1;
+    color: $warning;
+}
+
+#details-section {
+    background: $surface-light;
+    border: solid $accent;
+    padding: 1;
+    margin-bottom: 1;
+    max-height: 8;
+}
+
+.section-header {
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+
+.detail-item {
+    color: $text;
+    margin-left: 2;
+}
+
+#dialog-buttons {
+    dock: bottom;
+    height: 3;
+    align: center middle;
+    margin-top: 1;
+}
+
+#allow-btn {
+    margin-right: 1;
+    background: $success;
+    color: $text;
+}
+
+#allow-btn:hover {
+    background: $success-light;
+}
+
+#deny-btn {
+    margin-right: 1;
+    background: $error;
+    color: $text;
+}
+
+#deny-btn:hover {
+    background: $error-light;
+}
+
+#details-btn {
+    background: $accent;
+    color: $text;
+}
+
+#details-btn:hover {
+    background: $accent-light;
+}
+
+/* Always Allow Dialog Styles */
+#always-allow-dialog {
+    width: 60%;
+    height: 40%;
+    max-width: 60;
+    max-height: 15;
+    background: $surface;
+    border: solid $primary;
+    padding: 2;
+    margin: 2;
+    min-width: 50;
+    min-height: 12;
+}
+
+#always-title {
+    dock: top;
+    height: 1;
+    text-align: center;
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+
+#always-message {
+    text-align: center;
+    color: $text;
+    margin-bottom: 2;
+}
+
+#always-buttons {
+    dock: bottom;
+    height: 3;
+    align: center middle;
+}
+
+#yes-btn {
+    margin-right: 2;
+    background: $success;
+    color: $text;
+}
+
+#no-btn {
+    margin-left: 2;
+    background: $accent;
+    color: $text;
+}
