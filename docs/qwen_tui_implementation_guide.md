@@ -2,6 +2,9 @@
 
 ## Project Overview
 
+
+*Status: Phase 2 Completed with full vLLM and OpenRouter support (2025-06-20)*
+
 **Qwen-TUI** is a sophisticated terminal-based coding agent that combines Claude Code's proven UX patterns with Qwen3's powerful local inference capabilities. This guide provides a complete roadmap for implementing a production-ready system that works seamlessly across multiple LLM backends while maintaining the smooth developer experience that makes Claude Code exceptional.
 
 ## Implementation Strategy

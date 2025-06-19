@@ -39,7 +39,7 @@ class ConversationHistory:
     
     def _generate_session_filename(self) -> str:
         """Generate a unique filename for the current session."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         return f"conversation_{timestamp}.json"
     
     async def start_new_session(self) -> str:
@@ -260,15 +260,24 @@ class ConversationHistory:
         
         try:
             session_files = list(self.history_dir.glob("conversation_*.json"))
-            
+
             for session_file in session_files:
-                if session_file.stat().st_mtime < cutoff_time:
+                ts_str = session_file.stem.replace("conversation_", "")
+                try:
+                    file_time = datetime.strptime(ts_str, "%Y%m%d_%H%M%S_%f").timestamp()
+                except Exception:
+                    file_time = session_file.stat().st_mtime
+
+                if file_time < cutoff_time:
                     try:
                         session_file.unlink()
                         deleted_count += 1
                     except Exception as e:
-                        self.logger.warning("Failed to delete old session file", 
-                                          file=str(session_file), error=str(e))
+                        self.logger.warning(
+                            "Failed to delete old session file",
+                            file=str(session_file),
+                            error=str(e),
+                        )
             
             if deleted_count > 0:
                 self.logger.info("Cleaned up old conversation sessions", 

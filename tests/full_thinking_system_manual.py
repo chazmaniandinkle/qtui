@@ -1,3 +1,5 @@
+import pytest
+pytest.skip("manual test", allow_module_level=True)
 #!/usr/bin/env python3
 """
 Comprehensive test for the full thinking system integration.

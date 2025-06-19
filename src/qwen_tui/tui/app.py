@@ -60,6 +60,15 @@ class QwenTUIApp(App):
     backend_status = reactive("initializing")
     message_count = reactive(0)
     is_compact_layout = reactive(False)
+
+    # Allow tests to override size property
+    @property
+    def size(self):  # type: ignore[override]
+        return getattr(self, "_mock_size", super().size)
+
+    @size.setter
+    def size(self, value):  # type: ignore[override]
+        self._mock_size = value
     
     def __init__(self, backend_manager: BackendManager, config: Config):
         super().__init__()
@@ -821,7 +830,7 @@ class QwenTUIApp(App):
         elif "connection" in error_str.lower() or "connect" in error_str.lower():
             return f"Connection Error: {error_str}\n\nTip: Check if your backend service is running."
         
-        elif "timeout" in error_str.lower():
+        elif "timeout" in error_str.lower() or "timed out" in error_str.lower():
             return f"Timeout Error: {error_str}\n\nTip: The request took too long. Try a shorter message or check your connection."
         
         elif "unauthorized" in error_str.lower() or "api key" in error_str.lower():
