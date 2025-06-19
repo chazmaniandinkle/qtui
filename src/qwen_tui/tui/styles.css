@@ -172,6 +172,19 @@
 #backend-panel {
 }
 
+/* Backend control bar */
+#backend-controls {
+    layout: horizontal;
+    height: 3;
+    align: center middle;
+    margin-bottom: 1;
+}
+
+#backend-controls Select {
+    width: 1fr;
+    margin-left: 1;
+}
+
 #status-panel {
 }
 
