@@ -35,6 +35,7 @@ except ImportError:
 
 # Import permission system
 from .permission_manager import TUIPermissionManager, get_permission_manager, set_permission_manager
+from .backend_panel import BackendPanel
 
 
 class QwenTUIApp(App):
@@ -980,115 +981,6 @@ class InputPanel(Container):
                 input_widget.value = ""
 
 
-class BackendPanel(Container):
-    """Panel showing backend information and controls."""
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.backend_manager = None
-        self.update_timer = None
-        
-    def compose(self) -> ComposeResult:
-        yield Static("🔧 Backend Panel", classes="panel-title")
-        yield ScrollableContainer(
-            Static("Initializing backends...", id="backend-status"),
-            id="backend-content"
-        )
-    
-    async def on_mount(self) -> None:
-        """Initialize the backend panel."""
-        # Get backend manager from app
-        self.backend_manager = self.app.backend_manager
-        if self.backend_manager:
-            # Initial update
-            await self.update_backend_info()
-            # Start periodic updates every 5 seconds
-            self.update_timer = self.set_interval(5.0, self.update_backend_info)
-    
-    async def update_backend_info(self) -> None:
-        """Update backend information display."""
-        if not self.backend_manager:
-            return
-            
-        try:
-            # Get backend information
-            backend_info = await self.backend_manager.get_backend_info()
-            current_models = await self.backend_manager.get_current_models()
-            status_summary = self.backend_manager.get_status_summary()
-            
-            # Build display content
-            content = []
-            
-            # Overall status
-            total = status_summary.get("total_backends", 0)
-            available = status_summary.get("available_backends", 0)
-            preferred = status_summary.get("preferred_backend", "None")
-            
-            content.append(f"📊 Status: {available}/{total} backends available")
-            content.append(f"🎯 Preferred: {preferred}")
-            content.append("")
-            
-            # Individual backend details
-            if backend_info:
-                for backend_type, info in backend_info.items():
-                    name = info.get("name", backend_type.value)
-                    status = info.get("status", "unknown")
-                    
-                    # Status indicator
-                    if status == "ready":
-                        indicator = "🟢"
-                    elif status == "error":
-                        indicator = "🔴"
-                    else:
-                        indicator = "🟡"
-                    
-                    content.append(f"{indicator} {name}")
-                    
-                    # Connection details
-                    host = info.get("host", "N/A")
-                    port = info.get("port", "N/A")
-                    content.append(f"   📡 {host}:{port}")
-                    
-                    # Current model
-                    current_model = current_models.get(backend_type.value, "None")
-                    if current_model:
-                        # Truncate long model names
-                        display_model = current_model
-                        if len(display_model) > 30:
-                            display_model = display_model[:27] + "..."
-                        content.append(f"   🤖 Model: {display_model}")
-                    else:
-                        content.append(f"   🤖 Model: None loaded")
-                    
-                    # Version and capabilities
-                    version = info.get("version", "Unknown")
-                    if version != "Unknown":
-                        content.append(f"   📋 Version: {version}")
-                    
-                    # Error information
-                    error = info.get("error")
-                    if error:
-                        error_preview = error[:50] + "..." if len(error) > 50 else error
-                        content.append(f"   ⚠️  Error: {error_preview}")
-                    
-                    content.append("")  # Empty line between backends
-            else:
-                content.append("No backend information available")
-            
-            # Update the display
-            backend_status = self.query_one("#backend-status", Static)
-            backend_status.update("\n".join(content))
-            
-        except Exception as e:
-            # Error handling
-            error_content = f"❌ Error updating backend info:\n{str(e)}"
-            backend_status = self.query_one("#backend-status", Static)
-            backend_status.update(error_content)
-    
-    def on_unmount(self) -> None:
-        """Clean up timer when unmounting."""
-        if self.update_timer:
-            self.update_timer.stop()
 
 
 class StatusPanel(Container):
