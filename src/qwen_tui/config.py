@@ -140,6 +140,47 @@ class UIConfig(BaseModel):
     )
 
 
+class MCPServerConfig(BaseModel):
+    """Configuration for an MCP server."""
+    
+    name: str = Field(..., description="Server name")
+    url: str = Field(..., description="Server WebSocket URL")
+    enabled: bool = Field(default=True, description="Whether this server is enabled")
+    tools: Optional[List[str]] = Field(
+        default=None, description="Specific tools to load (None = all tools)"
+    )
+    timeout: int = Field(default=30, description="Request timeout in seconds")
+    auth: Optional[Dict[str, str]] = Field(
+        default=None, description="Authentication headers"
+    )
+    retry_attempts: int = Field(default=3, description="Number of retry attempts")
+    retry_delay: float = Field(default=1.0, description="Delay between retries in seconds")
+    health_check_interval: int = Field(
+        default=60, description="Health check interval in seconds"
+    )
+
+
+class MCPConfig(BaseModel):
+    """MCP (Model Context Protocol) configuration."""
+    
+    enabled: bool = Field(default=False, description="Enable MCP integration")
+    servers: List[MCPServerConfig] = Field(
+        default_factory=list, description="MCP server configurations"
+    )
+    auto_discover: bool = Field(
+        default=True, description="Automatically discover and connect to servers"
+    )
+    tool_prefix: bool = Field(
+        default=True, description="Prefix MCP tool names with server name"
+    )
+    connection_timeout: int = Field(
+        default=10, description="Connection timeout in seconds"
+    )
+    max_concurrent_calls: int = Field(
+        default=5, description="Maximum concurrent MCP tool calls"
+    )
+
+
 class Config(BaseModel):
     """Main configuration model."""
 
@@ -159,6 +200,7 @@ class Config(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
+    mcp: MCPConfig = Field(default_factory=MCPConfig)
 
     # Advanced settings
     max_context_tokens: int = Field(default=32000, description="Maximum context window")
@@ -307,6 +349,27 @@ def load_config() -> Config:
     # Security settings
     if security_profile := os.getenv("QWEN_TUI_SECURITY_PROFILE"):
         env_overrides.setdefault("security", {})["profile"] = security_profile
+
+    # MCP settings
+    if mcp_enabled := os.getenv("QWEN_TUI_MCP_ENABLED"):
+        env_overrides.setdefault("mcp", {})["enabled"] = mcp_enabled.lower() in ("true", "1", "yes")
+    if mcp_servers := os.getenv("QWEN_TUI_MCP_SERVERS"):
+        # Parse comma-separated server URLs
+        try:
+            server_urls = mcp_servers.split(",")
+            servers = []
+            for i, url in enumerate(server_urls):
+                url = url.strip()
+                if url:
+                    servers.append({
+                        "name": f"server_{i+1}",
+                        "url": url,
+                        "enabled": True
+                    })
+            if servers:
+                env_overrides.setdefault("mcp", {})["servers"] = servers
+        except Exception:
+            print(f"Warning: Invalid MCP servers configuration: {mcp_servers}")
 
     # Merge configurations: defaults < file < environment
     final_config = {**config_data, **env_overrides}
