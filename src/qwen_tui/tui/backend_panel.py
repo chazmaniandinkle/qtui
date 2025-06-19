@@ -22,9 +22,9 @@ class BackendPanel(Container):
         yield Static("🔧 Backend Panel", classes="panel-title")
         with Horizontal(id="backend-controls"):
             yield Label("Backend:")
-            yield Select(id="backend-select")
+            yield Select(options=[], id="backend-select")
             yield Label("Model:")
-            yield Select(id="model-select")
+            yield Select(options=[], id="model-select")
         yield ScrollableContainer(
             Static("Initializing backends...", id="backend-status"),
             id="backend-content",
