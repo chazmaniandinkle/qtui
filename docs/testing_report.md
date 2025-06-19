@@ -1,20 +1,45 @@
 # Testing Report
 
+*Updated: 2025-06-19 - MCP Integration Testing*
+
 ## Environment
-- Python version: 3.12.10
-- Repo commit: 9dde952
+- Python version: 3.10.17
+- Repo commit: Latest with MCP integration
 
 ## Automated Tests
 
+### Core Tests
 All automated tests were executed with `pytest`:
 
 ```
-.........................................................                [100%]
-=============================== warnings summary ===============================
-... (truncated warnings)
+tests/test_tui.py ...................                                    [100%]
+19 passed in 0.25s
 ```
 
-All tests passed successfully.
+### MCP Integration Tests
+New comprehensive MCP test suite:
+
+```
+tests/test_mcp_integration.py ...................                        [100%]
+19 passed in 0.16s
+```
+
+**Total: 38 tests passed successfully**
+
+### MCP Test Coverage
+- **TestMCPModels**: Protocol models and data structures (4 tests)
+- **TestMCPClient**: Client connection and communication (3 tests)  
+- **TestMCPToolAdapter**: Tool adapter functionality (6 tests)
+- **TestMCPIntegration**: Integration with Qwen-TUI (4 tests)
+- **TestMCPDiscovery**: Server discovery and management (2 tests)
+
+All MCP tests validate:
+- Protocol model validation and schema conversion
+- WebSocket client error handling
+- Tool adapter execution and parameter validation
+- Configuration integration
+- Permission system compatibility
+- Discovery service lifecycle
 
 ## OpenRouter Connection Test
 

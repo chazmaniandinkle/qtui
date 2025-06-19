@@ -10,7 +10,8 @@ Qwen-TUI provides a production-ready terminal interface for AI-powered coding as
 - **Claude Code-Inspired UX**: Familiar interface patterns for developers
 - **Advanced Security**: Risk assessment and permission gates for safe operation
 - **High Performance**: Optimized for local inference with efficient context management
-- **Extensible Architecture**: MCP integration for custom tools and workflows
+- **Extensible Architecture**: MCP integration for unlimited tool expansion
+- **Hybrid Tool Ecosystem**: Local tools + remote MCP servers for maximum capabilities
 
 ## Quick Start
 
@@ -149,6 +150,53 @@ export QWEN_TUI_OPENROUTER_MODEL=deepseek/deepseek-r1-0528-qwen3-8b
 export OPENROUTER_API_KEY=<key>
 ```
 
+## MCP Integration
+
+Qwen-TUI supports **Model Context Protocol (MCP)** for extending tool capabilities with remote servers.
+
+### Quick Start with MCP
+
+1. **Enable MCP in your config:**
+```yaml
+mcp:
+  enabled: true
+  servers:
+    - name: "filesystem"
+      url: "ws://localhost:3001"
+      enabled: true
+```
+
+2. **Start an MCP server:**
+```bash
+# Example: Filesystem tools server
+npx @modelcontextprotocol/server-filesystem ws://localhost:3001
+```
+
+3. **Use MCP tools in conversations:**
+```
+User: Search for files containing "config" in the current directory
+Agent: I'll use the filesystem tools to search for files.
+[Uses mcp_filesystem_search_files tool]
+```
+
+### MCP Features
+
+- **Seamless Integration**: MCP tools work identically to built-in tools
+- **Auto-Discovery**: Automatic tool registration from MCP servers
+- **Health Monitoring**: Automatic reconnection and error recovery
+- **Security Integration**: Full permission system compatibility
+- **Performance Optimized**: Connection pooling and concurrent execution
+
+### Popular MCP Servers
+
+- **Filesystem Tools**: File operations and search
+- **Web Tools**: Web search and URL fetching  
+- **Database Tools**: SQL queries and schema inspection
+- **Git Tools**: Version control operations
+- **Custom Tools**: Build your own MCP servers
+
+For complete MCP documentation, see [docs/MCP_INTEGRATION.md](docs/MCP_INTEGRATION.md).
+
 ## Development
 
 ### Project Structure
@@ -160,6 +208,7 @@ qwen-tui/
 │   ├── backends/           # LLM backend implementations
 │   ├── agents/             # Agent core and ReAct loop
 │   ├── tools/              # Tool implementations
+│   ├── mcp/                # MCP integration (NEW)
 │   ├── tui/                # Textual UI components
 │   └── utils/              # Shared utilities
 ├── tests/                  # Test suite
