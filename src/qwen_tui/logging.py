@@ -66,7 +66,8 @@ def setup_logging(config: LoggingConfig, tui_mode: bool = False) -> None:
         logging.basicConfig(
             format="%(message)s",
             level=getattr(logging, config.level.value),
-            handlers=[]  # No handlers for stdout in TUI mode
+            handlers=[],  # No handlers for stdout in TUI mode
+            force=True,   # Remove existing handlers
         )
     else:
         # Normal CLI mode - use stdout
@@ -74,6 +75,7 @@ def setup_logging(config: LoggingConfig, tui_mode: bool = False) -> None:
             format="%(message)s",
             stream=sys.stdout,
             level=getattr(logging, config.level.value),
+            force=True,
         )
     
     # Setup file logging if specified
