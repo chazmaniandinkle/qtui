@@ -28,7 +28,6 @@
     min-height: 3;
     max-height: 5;
     padding: 1;
-    layout: horizontal;
 }
 
 #message-input {
@@ -104,17 +103,7 @@
 }
 
 /* Ensure minimum heights for functionality */
-#input-panel {
-    min-height: 3;
-    max-height: 5;
-}
-
-#message-input {
-    min-height: 1;
-}
-
 #send-button {
-    min-height: 1;
     min-width: 8;
 }
 
@@ -278,7 +267,6 @@ Button.-primary:hover {
     padding: 0 1;
     margin: 0 0 1 0;
     color: $text;
-    border: round;
 }
 
 .action-widget.running {

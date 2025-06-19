@@ -926,7 +926,8 @@ class ThinkingWidget(Static):
     def start_thinking(self):
         """Start the thinking animation."""
         if self.timer is None:
-            self.timer = self.set_interval(0.1, self.update_spinner)
+            # Use slower update rate to reduce terminal interference
+            self.timer = self.set_interval(0.5, self.update_spinner)
     
     def stop_thinking(self):
         """Stop the thinking animation."""
@@ -954,11 +955,13 @@ class ThinkingWidget(Static):
     def update_display(self):
         """Update the widget display."""
         if self.is_expanded:
-            content = f"[dim]🤔 Thinking (expanded):[/dim]\n{self.full_thoughts}"
+            # Use simple text formatting to avoid rich markup issues
+            content = f"🤔 Thinking (expanded):\n{self.full_thoughts}"
         else:
             spinner = self.spinner_chars[self.spinner_frame] if self.timer else "💭"
             preview = self.thinking_text if self.thinking_text else "Thinking..."
-            content = f"[dim]{spinner} {preview}[/dim]"
+            # Avoid rich markup that might cause terminal bleeding
+            content = f"{spinner} {preview}"
         self.update(content)
     
     def toggle_expansion(self):
@@ -1008,31 +1011,32 @@ class ActionWidget(Static):
         """Update the widget display."""
         if self.status == "running":
             icon = "🔄"
-            status_text = f"[yellow]Running {self.tool_name}...[/yellow]"
+            status_text = f"Running {self.tool_name}..."
         elif self.status == "completed":
             icon = "✅"
-            status_text = f"[green]Completed {self.tool_name}[/green]"
+            status_text = f"Completed {self.tool_name}"
         elif self.status == "error":
             icon = "❌"
-            status_text = f"[red]Failed {self.tool_name}[/red]"
+            status_text = f"Failed {self.tool_name}"
         else:
             icon = "⚪"
-            status_text = f"[dim]{self.tool_name}[/dim]"
+            status_text = f"{self.tool_name}"
         
-        content = f"[dim]{icon}[/dim] {status_text}"
+        # Avoid rich markup that might cause terminal bleeding
+        content = f"{icon} {status_text}"
         
         # Add parameters if available
         if self.parameters:
             params_str = ", ".join([f"{k}={v}" for k, v in list(self.parameters.items())[:2]])
             if len(self.parameters) > 2:
                 params_str += "..."
-            content += f"\n  [dim]Parameters: {params_str}[/dim]"
+            content += f"\n  Parameters: {params_str}"
         
         # Add result or error
         if self.result:
             result_preview = self.result[:100] + "..." if len(self.result) > 100 else self.result
-            content += f"\n  [dim]Result: {result_preview}[/dim]"
+            content += f"\n  Result: {result_preview}"
         elif self.error:
-            content += f"\n  [red]Error: {self.error}[/red]"
+            content += f"\n  Error: {self.error}"
         
         self.update(content)

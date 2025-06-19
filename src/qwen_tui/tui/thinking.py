@@ -1,23 +1,17 @@
 """
-Thinking manager for coordinating between Qwen-Agent and TUI components.
+Advanced thinking system with ReAct agent integration.
 
-Handles the thinking process, tool execution, and UI updates for the
-Claude Code-style thinking system.
+This module provides sophisticated thinking functionality using the ReAct
+pattern with comprehensive tool usage and reasoning capabilities.
 """
 import asyncio
-from typing import Optional, Dict, Any, List, AsyncGenerator, Callable
+import os
+from typing import Optional, Dict, Any, List, AsyncGenerator, Callable, Union
 from dataclasses import dataclass
 
-try:
-    from qwen_agent.agents import Assistant
-    from qwen_agent.tools import BaseTool
-    QWEN_AGENT_AVAILABLE = True
-except ImportError:
-    Assistant = None
-    BaseTool = None
-    QWEN_AGENT_AVAILABLE = False
-
 from ..logging import get_main_logger
+from ..agents import ReActAgent, get_agent_factory, get_permission_manager
+from ..tools import get_tool_manager
 
 
 @dataclass
@@ -37,7 +31,7 @@ class ThinkingState:
 
 
 class ThinkingManager:
-    """Manages the thinking process and tool execution."""
+    """Advanced thinking manager with ReAct agent integration."""
     
     def __init__(self, backend_manager, config):
         self.backend_manager = backend_manager
@@ -45,9 +39,13 @@ class ThinkingManager:
         self.logger = get_main_logger()
         self.state = ThinkingState()
         
-        # Qwen-Agent setup
-        self.assistant: Optional[Assistant] = None
-        self.tools: List[BaseTool] = []
+        # Initialize tool and agent systems
+        self.tool_manager = get_tool_manager()
+        self.permission_manager = get_permission_manager()
+        self.agent_factory = get_agent_factory(backend_manager, self.tool_manager)
+        
+        # Current working agent
+        self.current_agent: Optional[ReActAgent] = None
         
         # UI callbacks
         self.on_thinking_update: Optional[Callable[[str], None]] = None
@@ -56,27 +54,32 @@ class ThinkingManager:
         self.on_action_error: Optional[Callable[[str, str, str], None]] = None
         self.on_thinking_complete: Optional[Callable[[str], None]] = None
     
-    async def initialize(self):
-        """Initialize the thinking manager with Qwen-Agent."""
-        if not QWEN_AGENT_AVAILABLE:
-            self.logger.info("Qwen-Agent not available, using direct backend mode")
-            return
-        
+    async def initialize(self, working_directory: Optional[str] = None):
+        """Initialize the thinking manager with ReAct agent system."""
         try:
-            # Get the current backend for model configuration
-            backend = self.backend_manager.get_preferred_backend()
-            if not backend:
-                self.logger.warning("No backend available for thinking system")
-                return
+            # Set working directory
+            if working_directory:
+                self.tool_manager.set_working_directory(working_directory)
+                self.permission_manager = get_permission_manager(working_directory)
+            else:
+                working_directory = os.getcwd()
+                self.tool_manager.set_working_directory(working_directory)
             
-            # For now, create a simple demo mode without full Qwen-Agent integration
-            # This will be expanded later when we have proper backend integration
-            self.tools = self._initialize_demo_tools()
-            self.logger.info("Thinking manager initialized in demo mode")
+            # Create ReAct agent
+            self.current_agent = ReActAgent(
+                backend_manager=self.backend_manager,
+                tool_manager=self.tool_manager
+            )
+            
+            if working_directory:
+                self.current_agent.set_working_directory(working_directory)
+            
+            self.logger.info("Advanced thinking manager initialized with ReAct agent")
             
         except Exception as e:
             self.logger.error("Failed to initialize thinking manager", error=str(e))
-            # Don't raise - fall back to direct backend mode
+            # Create fallback agent
+            self.current_agent = None
     
     def _get_model_config(self, backend) -> Dict[str, Any]:
         """Get model configuration for Qwen-Agent based on backend."""
@@ -123,49 +126,153 @@ class ThinkingManager:
         self.on_action_error = on_action_error
         self.on_thinking_complete = on_thinking_complete
     
-    async def think_and_respond(self, messages: List[Dict[str, str]]) -> AsyncGenerator[str, None]:
+    async def think_and_respond(self, user_input: Union[str, List[Dict[str, str]]]) -> AsyncGenerator[str, None]:
         """
-        Process messages through thinking system and generate response.
+        Process user message through ReAct agent and generate response.
+        
+        Args:
+            user_input: Either a string message or list of conversation messages
         
         This is the main entry point that:
-        1. Shows thinking animation
-        2. Simulates tool usage (demo mode)
+        1. Uses ReAct agent for sophisticated reasoning
+        2. Shows thinking animation and tool usage
         3. Updates UI with action progress
-        4. Yields final response
+        4. Yields final response with visual indicators
         """
         self.state.is_thinking = True
-        self.state.current_thought = "Analyzing your request..."
+        self.state.current_thought = "🤔 Starting analysis..."
         self.state.full_thoughts = ""
+        
+        # Handle different input formats
+        if isinstance(user_input, list):
+            # Convert conversation history to current user message
+            user_message = ""
+            for msg in reversed(user_input):
+                if msg.get("role") == "user":
+                    user_message = msg.get("content", "")
+                    break
+            
+            if not user_message:
+                user_message = "Hello! How can I help you today?"
+        else:
+            user_message = user_input
         
         try:
             # Start thinking animation
             if self.on_thinking_update:
                 await self.on_thinking_update(self.state.current_thought)
             
-            # Simulate thinking process
-            response_text = ""
-            async for chunk in self._simulate_thinking_process(messages):
-                if chunk.get('type') == 'thinking':
-                    self._update_thinking(chunk.get('content', ''))
-                elif chunk.get('type') == 'action_start':
-                    await self._handle_action_start(chunk)
-                elif chunk.get('type') == 'action_complete':
-                    await self._handle_action_complete(chunk)
-                elif chunk.get('type') == 'action_error':
-                    await self._handle_action_error(chunk)
-                elif chunk.get('type') == 'response':
-                    response_text += chunk.get('content', '')
-                    yield chunk.get('content', '')
+            if self.current_agent:
+                # Use ReAct agent for sophisticated processing
+                full_response = ""
+                
+                async for chunk in self.current_agent.process_message(user_message):
+                    # Parse chunk for different types of content
+                    if chunk.startswith("🤔"):
+                        # Thinking indicator
+                        self._update_thinking(chunk)
+                    elif chunk.startswith("⏺"):
+                        # Tool execution start
+                        await self._handle_tool_execution_start(chunk)
+                    elif chunk.startswith("⎿"):
+                        # Tool execution complete
+                        await self._handle_tool_execution_complete(chunk)
+                    elif chunk.startswith("❌"):
+                        # Error indicator
+                        await self._handle_error_indicator(chunk)
+                    else:
+                        # Accumulate response for think tag filtering
+                        full_response += chunk
+                
+                # Apply think tag filtering to the complete response
+                if full_response:
+                    visible_content, thinking_content = self._filter_thinking_tags(full_response)
+                    
+                    # Update thinking state with extracted thinking content
+                    if thinking_content:
+                        self.state.full_thoughts += thinking_content
+                        self._update_thinking("Processing internal reasoning...")
+                    
+                    # Yield only the filtered visible content
+                    if visible_content.strip():
+                        yield visible_content
+            else:
+                # Fallback to direct backend
+                async for chunk in self._fallback_direct_response(user_message):
+                    yield chunk
             
             # Complete thinking process
             self.state.is_thinking = False
             if self.on_thinking_complete:
-                await self.on_thinking_complete(response_text)
+                await self.on_thinking_complete("Thinking completed")
                 
         except Exception as e:
             self.state.is_thinking = False
             self.logger.error("Error in thinking process", error=str(e))
-            yield f"Error in thinking process: {str(e)}"
+            yield f"❌ Error in thinking process: {str(e)}"
+    
+    async def _handle_tool_execution_start(self, chunk: str):
+        """Handle tool execution start indicators."""
+        # Extract tool name from chunk (simplified parsing)
+        tool_name = "unknown"
+        if ":" in chunk:
+            try:
+                tool_name = chunk.split(":")[1].strip().split()[0]
+            except IndexError:
+                pass
+        
+        self.state.active_tools.append(tool_name)
+        if self.on_action_start:
+            await self.on_action_start("", tool_name, {})
+    
+    async def _handle_tool_execution_complete(self, chunk: str):
+        """Handle tool execution completion indicators."""
+        # Extract tool name from chunk (simplified parsing)
+        tool_name = "unknown"
+        if ":" in chunk:
+            try:
+                tool_name = chunk.split(":")[1].strip().split()[0]
+            except IndexError:
+                pass
+        
+        if tool_name in self.state.active_tools:
+            self.state.active_tools.remove(tool_name)
+        
+        self.state.completed_actions.append({
+            'tool_name': tool_name,
+            'result': 'Completed successfully',
+            'status': 'completed'
+        })
+        
+        if self.on_action_complete:
+            await self.on_action_complete("", tool_name, "Completed successfully")
+    
+    async def _handle_error_indicator(self, chunk: str):
+        """Handle error indicators."""
+        self.logger.warning(f"Agent error: {chunk}")
+        if self.on_action_error:
+            await self.on_action_error("", "unknown", chunk)
+    
+    async def _fallback_direct_response(self, user_message: str) -> AsyncGenerator[str, None]:
+        """Fallback to direct backend response when agent is not available."""
+        try:
+            from ..backends.base import LLMRequest
+            
+            messages = [
+                {"role": "system", "content": "You are a helpful coding assistant."},
+                {"role": "user", "content": user_message}
+            ]
+            
+            request = LLMRequest(messages=messages, stream=True)
+            
+            async for response in self.backend_manager.generate(request):
+                if response.is_partial and response.delta:
+                    yield response.delta
+                elif response.content and not response.is_partial:
+                    yield response.content
+                    
+        except Exception as e:
+            yield f"Error in fallback response: {str(e)}"
     
     async def _simulate_thinking_process(self, messages: List[Dict[str, str]]) -> AsyncGenerator[Dict[str, Any], None]:
         """Simulate thinking process with demo tools."""
