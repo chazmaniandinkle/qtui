@@ -39,7 +39,8 @@ class OllamaBackend(LLMBackend):
         
         # Create HTTP session
         timeout = aiohttp.ClientTimeout(total=self._connection_timeout)
-        self.session = aiohttp.ClientSession(timeout=timeout)
+        # Allow ClientSession to pick up proxy settings from the environment.
+        self.session = aiohttp.ClientSession(timeout=timeout, trust_env=True)
         
         # Test connection
         try:
@@ -47,8 +48,13 @@ class OllamaBackend(LLMBackend):
             self._status = BackendStatus.CONNECTED
             self.logger.info("Ollama backend initialized successfully")
         except Exception as e:
+            if self.session:
+                await self.session.close()
+                self.session = None
             self._status = BackendStatus.ERROR
-            self.logger.error("Failed to initialize Ollama backend", error=str(e))
+            self.logger.error(
+                "Failed to initialize Ollama backend", error=str(e)
+            )
             raise BackendConnectionError(
                 f"Failed to connect to Ollama at {self.base_url}",
                 backend_name=self.name,

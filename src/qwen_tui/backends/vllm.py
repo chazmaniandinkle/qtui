@@ -29,12 +29,16 @@ class VLLMBackend(LLMBackend):
     async def initialize(self) -> None:
         self.logger.info("Initializing vLLM backend", host=self.vllm_config.host, port=self.vllm_config.port)
         timeout = aiohttp.ClientTimeout(total=self._connection_timeout)
-        self.session = aiohttp.ClientSession(timeout=timeout)
+        # Allow proxy environment variables to be honored for outbound requests.
+        self.session = aiohttp.ClientSession(timeout=timeout, trust_env=True)
         try:
             await self.health_check()
             self._status = BackendStatus.CONNECTED
             self.logger.info("vLLM backend initialized")
         except Exception as e:
+            if self.session:
+                await self.session.close()
+                self.session = None
             self._status = BackendStatus.ERROR
             self.logger.error("Failed to initialize vLLM backend", error=str(e))
             raise BackendConnectionError(
