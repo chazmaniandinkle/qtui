@@ -44,6 +44,18 @@ qwen-tui backends test
 qwen-tui config show
 ```
 
+### Slash Commands
+
+Inside the TUI you can use several helpful commands:
+
+```
+/help      Show keyboard shortcuts and command list
+/clear     Start a new conversation and clear history
+/history   List recent conversation sessions
+/load ID   Load a previous session by ID
+/export fmt  Export the current session (json or txt)
+```
+
 ## Features
 
 ### Multi-Backend Architecture

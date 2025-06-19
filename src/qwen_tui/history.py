@@ -265,8 +265,11 @@ class ConversationHistory:
                 ts_str = session_file.stem.replace("conversation_", "")
                 try:
                     file_time = datetime.strptime(ts_str, "%Y%m%d_%H%M%S_%f").timestamp()
-                except Exception:
-                    file_time = session_file.stat().st_mtime
+                except ValueError:
+                    try:
+                        file_time = datetime.strptime(ts_str, "%Y%m%d_%H%M%S").timestamp()
+                    except Exception:
+                        file_time = session_file.stat().st_mtime
 
                 if file_time < cutoff_time:
                     try:

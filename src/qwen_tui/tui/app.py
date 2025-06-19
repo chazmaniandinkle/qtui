@@ -295,9 +295,12 @@ class QwenTUIApp(App):
         self.conversation_history.clear()
         self.message_count = 0
         chat_scroll = self.query_one("#chat-scroll", ScrollableContainer)
-        # Clear chat-scroll messages
-        for child in list(chat_scroll.children):
-            child.remove()
+        # Clear chat messages depending on implementation
+        if hasattr(chat_scroll, "clear_messages"):
+            chat_scroll.clear_messages()
+        else:
+            for child in list(chat_scroll.children):
+                child.remove()
         # Start a new session
         asyncio.create_task(self._start_new_session())
         self.logger.info("Started new conversation")
@@ -387,10 +390,7 @@ class QwenTUIApp(App):
 • Use Escape to enable shortcuts when typing
 • Backend panel shows connection status
 • Status panel shows system information"""
-        help_message = ChatMessage("system", help_text)
-        chat_scroll = self.query_one("#chat-scroll", ScrollableContainer)
-        chat_scroll.mount(help_message)
-        help_message.scroll_visible()
+        self.add_system_message(help_text)
     
     def action_clear_focus(self) -> None:
         """Clear focus from input widgets to enable keyboard shortcuts."""
@@ -620,10 +620,7 @@ class QwenTUIApp(App):
         
         elif cmd == "clear":
             self.action_new_conversation()
-            # Mount system message for conversation cleared
-            clear_message = ChatMessage("system", "Conversation cleared.")
-            await chat_scroll.mount(clear_message)
-            clear_message.scroll_visible()
+            self.add_system_message("Conversation cleared.")
         
         elif cmd == "quit":
             self.action_quit()
@@ -635,10 +632,7 @@ class QwenTUIApp(App):
                 status = info.get("status", "unknown")
                 name = info.get("name", backend_type.value)
                 info_text += f"- {name}: {status}\n"
-            # Mount backend information as a system message
-            backend_message = ChatMessage("system", info_text)
-            await chat_scroll.mount(backend_message)
-            backend_message.scroll_visible()
+            self.add_system_message(info_text)
         
         elif cmd == "models":
             self.action_show_model_selector()
@@ -647,9 +641,7 @@ class QwenTUIApp(App):
             backend_name = args[0].lower()
             # Try to switch backend
             # This would need implementation in backend manager
-            switch_message = ChatMessage("system", f"Backend switching to {backend_name} (not implemented yet)")
-            await chat_scroll.mount(switch_message)
-            switch_message.scroll_visible()
+            self.add_system_message(f"Backend switching to {backend_name} (not implemented yet)")
         
         elif cmd == "history":
             # Show recent conversation sessions
@@ -673,9 +665,7 @@ class QwenTUIApp(App):
             await self._handle_permission_command(args)
         
         else:
-            error_message = ChatMessage("error", f"Unknown command: /{cmd}")
-            await chat_scroll.mount(error_message)
-            error_message.scroll_visible()
+            self.add_error_message(f"Unknown command: /{cmd}")
     
     async def _show_conversation_history(self) -> None:
         """Show recent conversation sessions."""
@@ -906,15 +896,21 @@ class QwenTUIApp(App):
 
     def add_system_message(self, content: str):
         chat_scroll = self.query_one("#chat-scroll", ScrollableContainer)
-        sys_msg = ChatMessage("system", content)
-        chat_scroll.mount(sys_msg)
-        sys_msg.scroll_visible()
+        if hasattr(chat_scroll, "add_system_message"):
+            chat_scroll.add_system_message(content)
+        else:
+            sys_msg = ChatMessage("system", content)
+            chat_scroll.mount(sys_msg)
+            sys_msg.scroll_visible()
 
     def add_error_message(self, content: str):
         chat_scroll = self.query_one("#chat-scroll", ScrollableContainer)
-        err_msg = ChatMessage("error", content)
-        chat_scroll.mount(err_msg)
-        err_msg.scroll_visible()
+        if hasattr(chat_scroll, "add_error_message"):
+            chat_scroll.add_error_message(content)
+        else:
+            err_msg = ChatMessage("error", content)
+            chat_scroll.mount(err_msg)
+            err_msg.scroll_visible()
 
 
 class InputPanel(Container):
