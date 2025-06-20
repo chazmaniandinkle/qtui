@@ -43,6 +43,9 @@ qwen-tui backends test
 
 # Show current configuration
 qwen-tui config show
+
+# Enable verbose debug logging
+qwen-tui --debug start
 ```
 
 ### Slash Commands

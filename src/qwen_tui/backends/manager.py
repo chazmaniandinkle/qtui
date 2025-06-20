@@ -243,11 +243,21 @@ class BackendManager:
         
         if not backend:
             raise BackendUnavailableError("No healthy backends are available")
-        
-        self.logger.info("Routing request to backend",
-                        backend=backend.name,
-                        model=request.model,
-                        messages=len(request.messages))
+
+        self.logger.debug(
+            "Selected backend",
+            backend=backend.name,
+            model=request.model,
+            message_count=len(request.messages),
+            tool_count=len(request.tools) if request.tools else 0,
+        )
+
+        self.logger.info(
+            "Routing request to backend",
+            backend=backend.name,
+            model=request.model,
+            messages=len(request.messages),
+        )
         
         try:
             # Try primary backend
@@ -266,6 +276,11 @@ class BackendManager:
             # Try fallback backends
             available_backends = self.get_available_backends()
             fallback_backends = [b for b in available_backends if b != backend]
+
+            self.logger.debug(
+                "Attempting fallback backends",
+                backends=[b.name for b in fallback_backends],
+            )
             
             for fallback_backend in fallback_backends:
                 try:
@@ -276,12 +291,23 @@ class BackendManager:
                     return
                     
                 except Exception as fallback_error:
-                    self.logger.warning(f"Fallback failed on {fallback_backend.name}",
-                                      backend=fallback_backend.name,
-                                      error=str(fallback_error))
+                    self.logger.warning(
+                        f"Fallback failed on {fallback_backend.name}",
+                        backend=fallback_backend.name,
+                        error=str(fallback_error),
+                    )
+                    self.logger.debug(
+                        "Fallback error details",
+                        backend=fallback_backend.name,
+                        error_type=type(fallback_error).__name__,
+                    )
                     continue
             
             # All backends failed
+            self.logger.debug(
+                "All backends failed",
+                attempted=[b.name for b in [backend] + fallback_backends],
+            )
             raise BackendError(
                 f"All backends failed. Last error: {str(e)}",
                 context={"attempted_backends": [b.name for b in [backend] + fallback_backends]}

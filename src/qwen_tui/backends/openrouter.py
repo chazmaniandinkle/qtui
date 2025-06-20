@@ -142,6 +142,7 @@ class OpenRouterBackend(LLMBackend):
             openai_request["response_format"] = request.response_format
         if request.backend_params:
             openai_request.update(request.backend_params)
+        self.logger.debug("OpenRouter request payload", payload=openai_request)
         start_time = time.time()
         try:
             async with self.session.post(
@@ -200,6 +201,7 @@ class OpenRouterBackend(LLMBackend):
     ) -> AsyncGenerator[LLMResponse, None]:
         buffer = ""
         async for chunk in response.content.iter_any():
+            self.logger.debug("Received stream chunk", size=len(chunk))
             buffer += chunk.decode("utf-8", errors="ignore")
             while "\n" in buffer:
                 line, buffer = buffer.split("\n", 1)
@@ -218,8 +220,10 @@ class OpenRouterBackend(LLMBackend):
                         resp.is_partial = True
                         resp.delta = delta["content"]
                         resp.content = delta["content"]
+                        self.logger.debug("Streaming delta", delta=resp.delta)
                     if "tool_calls" in delta:
                         resp.tool_calls = delta["tool_calls"]
+                        self.logger.debug("Streaming tool calls", calls=resp.tool_calls)
                     yield resp
                     if choice.get("finish_reason"):
                         break

@@ -320,8 +320,9 @@ class LMStudioBackend(LLMBackend):
     ) -> AsyncGenerator[LLMResponse, None]:
         """Handle streaming response from LM Studio."""
         buffer = ""
-        
+
         async for chunk in response.content.iter_any():
+            self.logger.debug("Received stream chunk", size=len(chunk))
             buffer += chunk.decode('utf-8', errors='ignore')
             
             # Process complete lines
@@ -357,10 +358,12 @@ class LMStudioBackend(LLMBackend):
                         response_obj.is_partial = True
                         response_obj.delta = delta["content"]
                         response_obj.content = delta["content"]
+                        self.logger.debug("Streaming delta", delta=response_obj.delta)
                     
                     # Handle tool calls in streaming
                     if "tool_calls" in delta:
                         response_obj.tool_calls = delta["tool_calls"]
+                        self.logger.debug("Streaming tool calls", calls=response_obj.tool_calls)
                     
                     yield response_obj
                     

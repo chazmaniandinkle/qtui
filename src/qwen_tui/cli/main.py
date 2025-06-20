@@ -45,6 +45,7 @@ def main(
         None, "--log-level", "-l", help="Log level (DEBUG, INFO, WARNING, ERROR)"
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug logging"),
 ):
     """Qwen-TUI: Terminal-based coding agent with multi-backend LLM support."""
     try:
@@ -54,7 +55,7 @@ def main(
         # Override log level if specified
         if log_level:
             config.logging.level = log_level.upper()
-        if verbose:
+        if verbose or debug:
             config.logging.level = "DEBUG"
         
         # Configure logging

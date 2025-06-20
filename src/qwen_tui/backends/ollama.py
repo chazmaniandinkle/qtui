@@ -154,6 +154,8 @@ class OllamaBackend(LLMBackend):
                         model=request.model,
                         messages=len(request.messages),
                         tools=len(request.tools) if request.tools else 0)
+
+        self.logger.debug("Ollama request payload", payload=ollama_request)
         
         start_time = time.time()
         
@@ -287,8 +289,9 @@ class OllamaBackend(LLMBackend):
     ) -> AsyncGenerator[LLMResponse, None]:
         """Handle streaming response from Ollama."""
         buffer = ""
-        
+
         async for chunk in response.content.iter_any():
+            self.logger.debug("Received stream chunk", size=len(chunk))
             buffer += chunk.decode('utf-8', errors='ignore')
             
             # Process complete JSON lines
@@ -309,6 +312,7 @@ class OllamaBackend(LLMBackend):
                     if not data.get("done", False):
                         ollama_response.is_partial = True
                         ollama_response.delta = data.get("message", {}).get("content", "")
+                        self.logger.debug("Streaming delta", delta=ollama_response.delta)
                     
                     yield ollama_response
                     
